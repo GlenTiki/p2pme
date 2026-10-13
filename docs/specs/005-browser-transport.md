@@ -40,3 +40,7 @@ Earlier reviews found terminal control labels, a missing direct Zod dependency, 
 The invitation is a bearer secret. A person who obtains it can race either peer within its lifetime. Local approval confirms the requested label and scope; it does not prove the human identity of the remote peer. Copy the invitation only to the intended local host.
 
 The daemon, CLI, dispatcher, browser UI, and package exports require their own integration review. This transport verdict does not approve those separate components.
+
+Host approval accepts an AbortSignal. Cancellation before the acknowledgement and durable commit stops the temporary room without a grant. The host checks cancellation again immediately before persistence. Once persistence starts, the acknowledged approval is committed. A later CLI disconnect does not undo that grant; the user can revoke it.
+
+Claude Sonnet 5.5 accepted the final pairing cancellation source and tests with SHA256 `20ce5e36f77af85b9319c078713c958de1e514e2c1ad1bf480960cbb22281efe`. This digest uses src/pairing.ts followed by tests/pairing.test.ts, with each path and content followed by a NUL. Two regression tests cover cancellation before acknowledgement and after acknowledgement but before the durable commit.

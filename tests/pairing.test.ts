@@ -101,3 +101,43 @@ it("does not activate a grant after a durable write failure", async () => {
   await expect(pending).rejects.toThrow("disk failure");
   expect(f.operations).toEqual([]);
 });
+it("cancels pairing before acknowledgement without a durable grant", async () => {
+  const f = setup();
+  const abort = new AbortController();
+  const pending = approvePairing(f.invitation, f.grant, {
+    signal: abort.signal,
+    channelFactory: f.factory,
+    persist: async () => {
+      f.operations.push("persist");
+    },
+    activate: async () => {
+      f.operations.push("activate");
+    },
+  });
+  f.connect();
+  abort.abort();
+  await expect(pending).rejects.toThrow("cancelled");
+  expect(f.operations).toEqual([]);
+});
+it("checks cancellation at acknowledgement before it commits the grant", async () => {
+  const f = setup();
+  const abort = new AbortController();
+  const pending = approvePairing(f.invitation, f.grant, {
+    signal: abort.signal,
+    channelFactory: f.factory,
+    persist: async () => {
+      f.operations.push("persist");
+    },
+    activate: async () => {
+      f.operations.push("activate");
+    },
+  });
+  void f.frame({
+    type: "ack",
+    roomId: f.invitation.roomId,
+    grantId: f.grant.grantId,
+  });
+  abort.abort();
+  await expect(pending).rejects.toThrow("cancelled");
+  expect(f.operations).toEqual([]);
+});

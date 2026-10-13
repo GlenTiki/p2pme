@@ -101,6 +101,7 @@ export function beginPairing(
   };
 }
 export interface PairHostOptions extends PairOptions {
+  signal?: AbortSignal;
   persist(): Promise<void>;
   activate(): Promise<void>;
 }
@@ -109,9 +110,12 @@ export async function approvePairing(
   grant: ConnectionRecord,
   options: PairHostOptions,
 ): Promise<void> {
+  assertNotCancelled(options.signal);
   decodeInvitation(encodeInvitation(invitation));
   connectionRecord(grant);
   const ack = deferred<void>();
+  const cancel = () => ack.reject(new Error("Pairing cancelled"));
+  options.signal?.addEventListener("abort", cancel, { once: true });
   const channel = (options.channelFactory ?? openRtcChannel)(
     {
       credentials: invitation,
@@ -147,6 +151,8 @@ export async function approvePairing(
   try {
     await ack.promise;
     clearTimeout(timer);
+    assertNotCancelled(options.signal);
+    options.signal?.removeEventListener("abort", cancel);
     await options.persist();
     await options.activate();
     const cleanup = setTimeout(() => {
@@ -157,6 +163,7 @@ export async function approvePairing(
     await channel.close();
     throw error;
   } finally {
+    options.signal?.removeEventListener("abort", cancel);
     clearTimeout(timer);
   }
 }
@@ -174,4 +181,8 @@ function checkAck(
     Date.now() >= Date.parse(invitation.expiresAt)
   )
     throw new Error("Invalid pairing acknowledgement");
+}
+
+function assertNotCancelled(signal?: AbortSignal): void {
+  if (signal?.aborted) throw new Error("Pairing cancelled");
 }
