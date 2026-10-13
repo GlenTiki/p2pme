@@ -266,3 +266,29 @@ it("retains output failure for a UI action even when the adapter swallows it", a
     await f.host.close();
   }
 });
+it("stops provider calls and publications after a surface log failure", async () => {
+  let fail = true;
+  const f = await fixture(async () => {
+    if (fail) throw new Error("disk");
+  });
+  try {
+    await expect(
+      f.host.publishSurface(f.session.id, f.surface),
+    ).rejects.toThrow();
+    fail = false;
+    const reply = await f.host.dispatch(
+      f.state.grants[0]!.id,
+      f.request("sessions.chat", { sessionId: f.session.id, text: "run" }),
+    );
+    expect(reply.ok).toBe(false);
+    expect(!reply.ok && reply.error.code).toBe("log_unavailable");
+    expect(f.inputs).toEqual([]);
+    await expect(
+      f.host.publishSurface(f.session.id, f.surface),
+    ).rejects.toThrow("restart");
+    expect(f.events).toEqual([]);
+    expect(f.logs).toHaveLength(1);
+  } finally {
+    await f.host.close();
+  }
+});

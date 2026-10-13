@@ -7,6 +7,7 @@ import {
   type HostController,
   type SessionAdapter,
 } from "../src/host.js";
+import { MAX_SESSION_ENTRIES } from "../src/protocol.js";
 import { openHostStore } from "../src/host-store.js";
 import { type Grant, type HostRequest, scopes } from "../src/host-protocol.js";
 
@@ -835,5 +836,104 @@ describe("reviewed host authority failures", () => {
     expect(reopened.hostId).toBe(f.host.hostId);
     await reopened.close();
     await expect(f.store.update(() => {})).rejects.toThrow();
+  });
+});
+
+describe("host log capacity", () => {
+  it("refuses a new provider turn when only its receipt slot remains", async () => {
+    let submissions = 0;
+    const f = await setup({
+      async submit(_input, emit) {
+        submissions++;
+        for (let index = 0; index < MAX_SESSION_ENTRIES - 2; index++)
+          await emit({ type: "delta", text: "x" });
+      },
+    });
+    const chat = () =>
+      f.host.dispatch(
+        f.grant.id,
+        f.request("sessions.chat", { sessionId: f.session.id, text: "test" }),
+      );
+    expect((await chat()).ok).toBe(true);
+    const ingress = f.order.filter((entry) => entry === "ingress").length;
+    const response = await chat();
+    expect(response.ok).toBe(false);
+    if (!response.ok) {
+      expect(response.error.code).toBe("log_unavailable");
+      expect(response.error.message).toContain("restart");
+    }
+    expect(submissions).toBe(1);
+    expect(f.order.filter((entry) => entry === "ingress")).toHaveLength(
+      ingress,
+    );
+  });
+
+  it("aborts an overflowing turn and never invokes the provider on a later request", async () => {
+    let submissions = 0;
+    let signal!: AbortSignal;
+    const f = await setup({
+      async submit(input, emit) {
+        submissions++;
+        signal = input.signal;
+        for (let index = 0; index < MAX_SESSION_ENTRIES; index++)
+          await emit({ type: "delta", text: "x" });
+      },
+    });
+    const chat = () =>
+      f.host.dispatch(
+        f.grant.id,
+        f.request("sessions.chat", { sessionId: f.session.id, text: "test" }),
+      );
+    const first = await chat();
+    expect(first.ok).toBe(false);
+    if (!first.ok) {
+      expect(first.error.code).toBe("log_unavailable");
+      expect(first.error.message).toContain("may have run");
+    }
+    expect(signal.aborted).toBe(true);
+    const second = await chat();
+    expect(second.ok).toBe(false);
+    expect(submissions).toBe(1);
+  });
+
+  it.each(["ingress", "egress"])(
+    "blocks later side effects after an %s append failure",
+    async (direction) => {
+      const f = await setup();
+      f.failLogs(direction);
+      const chat = () =>
+        f.host.dispatch(
+          f.grant.id,
+          f.request("sessions.chat", { sessionId: f.session.id, text: "test" }),
+        );
+      expect((await chat()).ok).toBe(false);
+      f.failLogs("none");
+      const order = [...f.order];
+      const response = await f.host.dispatch(
+        f.grant.id,
+        f.request("sessions.configure", {
+          sessionId: f.session.id,
+          patch: { modelId: "large" },
+        }),
+      );
+      expect(response.ok).toBe(false);
+      if (!response.ok) expect(response.error.code).toBe("log_unavailable");
+      expect(f.order).toEqual(order);
+    },
+  );
+
+  it("blocks creation after the epoch output log fails", async () => {
+    const f = await setup();
+    f.failLogs("egress");
+    expect(
+      (await f.host.dispatch(f.grant.id, f.request("sessions.list"))).ok,
+    ).toBe(false);
+    f.failLogs("none");
+    const response = await f.host.dispatch(
+      f.grant.id,
+      f.request("sessions.create", { profileId: "test", label: "new" }),
+    );
+    expect(response.ok).toBe(false);
+    expect(f.order).not.toContain("create");
   });
 });

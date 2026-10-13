@@ -1,3 +1,4 @@
+import { HostLogPair, LogUnavailable } from "./host-logs.js";
 import { createSurfaceRegistry } from "./host-surfaces.js";
 import {
   createEnvelope,
@@ -24,7 +25,6 @@ import type {
   HostController,
   HostOptions,
   LocalProfile,
-  LogPair,
   SessionAdapter,
 } from "./host-types.js";
 export type * from "./host-types.js";
@@ -56,7 +56,7 @@ class HostFailure extends Error {
 class LocalHost implements HostController {
   readonly hostEpoch = crypto.randomUUID();
   private readonly active = new Map<string, ActiveSession>();
-  private readonly logs = new Map<string, Promise<LogPair>>();
+  private readonly logs = new Map<string, Promise<HostLogPair>>();
   private readonly seen = new Map<string, Set<string>>();
   private readonly revoked = new Set<string>();
   private readonly operations = new Map<
@@ -145,7 +145,7 @@ class LocalHost implements HostController {
     this.seen.set(grantId, seen);
   }
 
-  async logPair(sessionId: string): Promise<LogPair> {
+  async logPair(sessionId: string): Promise<HostLogPair> {
     let pair = this.logs.get(sessionId);
     if (!pair) {
       pair = this.openLogs(sessionId);
@@ -154,13 +154,16 @@ class LocalHost implements HostController {
     return pair;
   }
 
-  private async openLogs(sessionId: string): Promise<LogPair> {
+  private async openLogs(sessionId: string): Promise<HostLogPair> {
     const factory =
       this.options.logFactory ??
       ((id: string) => createSessionLog({ sessionId: id }));
     const ingress = await factory(sessionId, "ingress");
     try {
-      return { ingress, egress: await factory(sessionId, "egress") };
+      return new HostLogPair(
+        { ingress, egress: await factory(sessionId, "egress") },
+        () => this.operations.get(sessionId)?.abort.abort(),
+      );
     } catch (error) {
       await ingress.close();
       throw error;
@@ -312,8 +315,12 @@ class LocalHost implements HostController {
       throw new HostFailure("busy", "Session is busy");
     const abort = new AbortController();
     this.operations.set(sessionId, { grantId, requestId: request.id, abort });
+    let reservation: ReturnType<HostLogPair["reserve"]> | undefined;
     try {
       const logs = await this.logPair(sessionId);
+      reservation = logs.reserve(
+        ["sessions.chat", "tasks.delegate", "ui.action"].includes(request.op),
+      );
       await logs.ingress.append(
         createEnvelope(sessionId, "host.request", {
           requestId: request.id,
@@ -322,9 +329,10 @@ class LocalHost implements HostController {
         }),
       );
       this.authorize(grantId, request);
+      reservation.check();
       const response = await this.runOperation(grantId, request, abort.signal);
       this.authorize(grantId, request);
-      await logs.egress.append(
+      await reservation.appendResult(
         createEnvelope(sessionId, "host.result", {
           requestId: request.id,
           ok: response.ok,
@@ -334,6 +342,7 @@ class LocalHost implements HostController {
       this.authorize(grantId, request);
       return response;
     } finally {
+      reservation?.release();
       this.operations.delete(sessionId);
     }
   }
@@ -608,7 +617,7 @@ class LocalHost implements HostController {
 
   private failure(replyTo: string, error: unknown): HostResponse {
     const detail =
-      error instanceof HostFailure
+      error instanceof HostFailure || error instanceof LogUnavailable
         ? { code: error.code, message: error.message }
         : { code: "failed", message: "Host operation failed" };
     return {
