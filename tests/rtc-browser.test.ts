@@ -5,7 +5,7 @@ import { createWsRelayServer } from "@trystero-p2p/ws-relay/server";
 import { joinRoom } from "@trystero-p2p/ws-relay";
 import { RTCPeerConnection } from "werift";
 import { expect, it } from "vitest";
-import { openRtcChannel } from "../src/rtc-channel.js";
+import { openRtcChannel, type RtcNetwork } from "../src/rtc-channel.js";
 import { randomSecret } from "../src/rtc-identity.js";
 
 it("connects Chromium and Node with admission, targeted messages, reconnect and revocation", async () => {
@@ -23,9 +23,21 @@ it("connects Chromium and Node with admission, targeted messages, reconnect and 
     relayUrls: [`ws://127.0.0.1:${address.port}`],
     iceServers: [],
   };
-  const nodeNetwork = {
+  const rejectedPeers = new Set<string>();
+  const nodeNetwork: RtcNetwork = {
     ...network,
-    join: joinRoom,
+    join: (config, roomId, options) =>
+      joinRoom(config, roomId, {
+        ...options,
+        onPeerHandshake: async (...args) => {
+          try {
+            await options?.onPeerHandshake?.(...args);
+          } catch (error) {
+            rejectedPeers.add(args[0]);
+            throw error;
+          }
+        },
+      }),
     rtcPolyfill:
       RTCPeerConnection as unknown as typeof globalThis.RTCPeerConnection,
   };
@@ -50,7 +62,8 @@ it("connects Chromium and Node with admission, targeted messages, reconnect and 
   const browserSource = `
     import {openRtcChannel} from './src/rtc-channel.ts';
     import {validateWelcome} from './src/rtc-identity.ts';
-    import {joinRoom} from '@trystero-p2p/ws-relay';
+    import {joinRoom,selfId} from '@trystero-p2p/ws-relay';
+    window.peerId=selfId;
     window.framesReceived=[];window.connected=false;window.errors=[];
     window.start=()=>{window.channel=openRtcChannel({credentials:{...${JSON.stringify(credentials)},...(location.hash==='#wrong'?{secret:${JSON.stringify(randomSecret())}}:{})},hello:{version:1,role:'client',...${JSON.stringify(identity)}},
       acceptHello:value=>{window.epoch=validateWelcome(value,${JSON.stringify(identity)});},
@@ -103,7 +116,21 @@ it("connects Chromium and Node with admission, targeted messages, reconnect and 
     expect(received).toBe(1);
     const second = await browser.newPage();
     await second.goto(`http://127.0.0.1:${serverAddress.port}`);
-    await second.waitForFunction("window.errors.length>0");
+    await second.waitForFunction("window.peerId !== undefined");
+    const secondId = await second.evaluate<string>("window.peerId");
+    await expect
+      .poll(
+        async () =>
+          rejectedPeers.has(secondId) ||
+          (await second.evaluate<boolean>("window.errors.length>0")),
+        { timeout: 30000 },
+      )
+      .toBe(true);
+    expect(await second.evaluate("window.connected")).toBe(false);
+    expect(await second.evaluate("window.framesReceived")).toEqual([]);
+    await expect(
+      second.evaluate("window.channel.send('{}')"),
+    ).rejects.toThrow();
     expect(await page.evaluate("window.connected")).toBe(true);
     await page.evaluate(
       "window.channel.send(JSON.stringify({text:'still connected'}))",
