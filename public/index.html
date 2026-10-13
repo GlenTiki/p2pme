@@ -1,0 +1,408 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="p2pme is an open-source project by Glen Keane. Connect your phone to a local agent session, with local approval."
+    />
+    <meta name="theme-color" content="#f7f6ef" />
+    <title>p2pme — Connect agents. Control the work.</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/styles.css" />
+    <script type="module" src="/app.js"></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#app">Skip to the app</a>
+    <header class="site-header page-width">
+      <a class="wordmark" href="/" aria-label="p2pme home"
+        ><span class="brand-icon" aria-hidden="true">p↔p</span>p2pme<span
+          class="version"
+          >early access</span
+        ></a
+      >
+      <nav aria-label="Main navigation">
+        <a href="/host/">Host setup <span aria-hidden="true">↗</span></a>
+        <a href="#about">About</a>
+        <a href="https://github.com/GlenTiki/p2pme"
+          >GitHub <span aria-hidden="true">↗</span></a
+        >
+        <a class="author-link" href="https://glentiki.dev"
+          >Glen Keane <span aria-hidden="true">↗</span></a
+        >
+      </nav>
+    </header>
+
+    <main>
+      <section class="hero page-width" aria-labelledby="hero-title">
+        <div class="hero-copy">
+          <p class="eyebrow">
+            <span class="small-line" aria-hidden="true"></span> A personal
+            project by Glen Keane
+          </p>
+          <h1 id="hero-title">
+            Connect agents.<br /><span>Control the work.</span>
+          </h1>
+          <p class="hero-description">
+            A Hypercore library for local agent sessions. A browser app for
+            people. Use the chat example to reach a session from your phone.
+          </p>
+          <div class="hero-actions">
+            <a class="button primary" href="#app"
+              >Open the app <span aria-hidden="true">↓</span></a
+            ><a class="text-link" href="/host/"
+              >Set up a host <span aria-hidden="true">↗</span></a
+            >
+          </div>
+          <p class="hero-note">
+            Built with Hypercore. Pair with local approval. No account required.
+          </p>
+        </div>
+        <figure
+          class="connection-figure"
+          aria-label="A browser connects through WebRTC to a local host. The host exposes its registered Claude Code and Codex sessions."
+        >
+          <div class="figure-topline">
+            <span>THE CONNECTION</span><span>01 — 03</span>
+          </div>
+          <div class="diagram-node browser-node">
+            <span class="node-number">01</span
+            ><span class="device-symbol" aria-hidden="true">▯</span>
+            <div>
+              <strong>Your browser</strong><span>Phone or desktop</span>
+            </div>
+          </div>
+          <div class="diagram-path">
+            <span aria-hidden="true">↕</span
+            ><span>WebRTC · browser to host</span>
+          </div>
+          <div class="diagram-node host-node">
+            <span class="node-number">02</span
+            ><span class="device-symbol" aria-hidden="true">⌘</span>
+            <div>
+              <strong>Your local host</strong
+              ><span>One host ID. Your approval.</span>
+            </div>
+          </div>
+          <div class="session-branches">
+            <span aria-hidden="true">└</span>
+            <div class="session-tag">Claude Code</div>
+            <div class="session-tag">Codex</div>
+            <span class="node-number">03</span>
+          </div>
+          <figcaption>
+            One host. The sessions you choose to register.
+          </figcaption>
+        </figure>
+      </section>
+
+      <section
+        class="demo-section page-width"
+        id="demo"
+        aria-labelledby="demo-title"
+      >
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">TRY THE CONTROLS</p>
+            <h2 id="demo-title">An agent can shape the view.</h2>
+          </div>
+          <span class="demo-badge">Local demo</span>
+        </div>
+        <p class="demo-description">
+          Edit the task. Change an option. Show the note. These controls use a
+          bounded JSON surface. No agent is connected.
+        </p>
+        <div class="demo-layout">
+          <div class="demo-controls" id="local-demo">
+            <p>Enable JavaScript to try the local controls.</p>
+          </div>
+          <div class="demo-output">
+            <h3>Action preview</h3>
+            <p>
+              Your click produces a typed action. This example stays in your
+              browser.
+            </p>
+            <pre id="local-demo-result" aria-live="polite">
+Use “Try a local action” to inspect its data.</pre>
+          </div>
+        </div>
+      </section>
+      <section
+        class="app-section page-width"
+        id="app"
+        aria-labelledby="app-title"
+      >
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">YOUR WORKSPACE</p>
+            <h2 id="app-title">Connect. Choose. Chat.</h2>
+          </div>
+          <p class="connection-status" id="connection-status" role="status">
+            <span class="status-dot" aria-hidden="true"></span
+            ><span id="connection-status-text">Not connected</span>
+          </p>
+        </div>
+        <p class="development-note">
+          Create an invitation. Approve this browser on your local host. Then
+          choose a registered session.
+        </p>
+        <p id="app-feedback" class="app-feedback" role="status"></p>
+        <div class="workspace">
+          <aside class="host-panel" aria-labelledby="host-heading">
+            <div class="panel-heading">
+              <h3 id="host-heading">01 / Your host</h3>
+              <a href="/host/">Setup guide <span aria-hidden="true">↗</span></a>
+            </div>
+            <form id="connect-form">
+              <label for="device-label">Name this browser</label>
+              <input
+                id="device-label"
+                name="label"
+                type="text"
+                value="My browser"
+                maxlength="100"
+                required
+              />
+              <label class="checkbox-label" for="remember-host"
+                ><input
+                  id="remember-host"
+                  type="checkbox"
+                  autocomplete="off"
+                /><span>Remember this host in this browser</span></label
+              >
+              <p class="field-help">
+                This saves a device access secret on this browser. Anyone who
+                can use this browser profile can use that access.
+              </p>
+              <button
+                class="button primary full-width"
+                id="connect-host"
+                type="submit"
+              >
+                Create invitation <span aria-hidden="true">→</span>
+              </button>
+              <p class="field-help">
+                This starts public relay discovery. Approve the device locally.
+                No account is required.
+              </p>
+            </form>
+            <div id="pairing-panel" hidden>
+              <label for="pairing-code">Browser invitation</label>
+              <textarea
+                id="pairing-code"
+                rows="3"
+                readonly
+                spellcheck="false"
+              ></textarea>
+              <button class="text-button" id="copy-invitation" type="button">
+                Copy invitation
+              </button>
+              <label for="agent-prompt"
+                >Paste this into your agent session</label
+              >
+              <textarea
+                id="agent-prompt"
+                rows="5"
+                readonly
+                spellcheck="false"
+              ></textarea>
+              <button class="text-button" id="copy-agent-prompt" type="button">
+                Copy agent prompt
+              </button>
+              <p class="field-help">
+                The agent reads the host guide. You run <code>p2pme pair</code>,
+                paste the invitation, and approve the device in your terminal.
+                The agent cannot approve for you. The agent prompt includes a
+                one-use invitation, which becomes part of that conversation.
+              </p>
+            </div>
+            <p class="host-identity" id="host-id"></p>
+            <button
+              class="text-button"
+              id="disconnect-host"
+              type="button"
+              disabled
+            >
+              Cancel / disconnect
+            </button>
+            <div class="saved-hosts">
+              <h4>Remembered hosts</h4>
+              <ul id="host-list" class="empty-list">
+                <li>No hosts yet.</li>
+              </ul>
+            </div>
+            <button class="text-button" id="forget-all-hosts" type="button">
+              Forget saved hosts
+            </button>
+            <p class="field-help">
+              Forget removes this browser's saved access. To revoke the device
+              on the host, run the local host revoke command.
+            </p>
+          </aside>
+          <div class="session-panel">
+            <section class="session-picker" aria-labelledby="session-heading">
+              <div class="panel-heading">
+                <h3 id="session-heading">02 / Select a session</h3>
+                <button
+                  id="refresh-sessions"
+                  class="text-button"
+                  type="button"
+                  disabled
+                >
+                  Refresh
+                </button>
+                <span class="subtle-label" id="host-label"
+                  >No host selected</span
+                >
+              </div>
+              <ul class="empty-list" id="session-list">
+                <li>Connect to a host to see its registered sessions.</li>
+              </ul>
+            </section>
+            <details class="create-session-panel">
+              <summary>Create a session</summary>
+              <form id="create-session-form">
+                <label for="session-profile">Local profile</label
+                ><select id="session-profile">
+                  <option value="codex">Codex</option>
+                  <option value="claude">Claude Code</option></select
+                ><label for="session-label">Session name</label
+                ><input id="session-label" maxlength="100" required /><button
+                  class="button primary"
+                  id="create-session"
+                  type="submit"
+                  disabled
+                >
+                  Create session
+                </button>
+                <p class="field-help">
+                  The host must approve this profile and grant session creation
+                  access.
+                </p>
+              </form>
+            </details>
+            <section class="chat-panel" aria-labelledby="chat-heading">
+              <div class="panel-heading">
+                <h3 id="chat-heading">03 / Conversation</h3>
+                <span class="subtle-label" id="selected-session"
+                  >No session selected</span
+                >
+              </div>
+              <div
+                id="messages"
+                class="messages"
+                role="log"
+                aria-label="Session messages"
+                aria-live="polite"
+              >
+                <div class="conversation-empty">
+                  <span class="empty-mark" aria-hidden="true">↔</span>
+                  <h4>A direct line to your session.</h4>
+                  <p>
+                    Select a session to start a conversation.<br />Your agent
+                    stays on your host.
+                  </p>
+                </div>
+              </div>
+              <div id="agent-controls" class="agent-controls" hidden>
+                <h4>Agent controls</h4>
+                <div id="session-surface"></div>
+              </div>
+              <label class="checkbox-label" for="delegate-task"
+                ><input id="delegate-task" type="checkbox" disabled /><span
+                  >Send as an agent task. This requires delegation access.</span
+                ></label
+              >
+              <form class="message-form" id="message-form">
+                <label class="visually-hidden" for="message-input"
+                  >Message your selected session</label
+                ><textarea
+                  id="message-input"
+                  name="message"
+                  rows="2"
+                  placeholder="Select a session to send a message…"
+                  disabled
+                ></textarea
+                ><button
+                  class="button primary"
+                  id="send-message"
+                  type="submit"
+                  disabled
+                >
+                  Send <span aria-hidden="true">↑</span>
+                </button>
+              </form>
+              <p class="chat-note">
+                Your agent’s local tool and file permissions still apply.
+              </p>
+            </section>
+          </div>
+        </div>
+      </section>
+
+      <section
+        class="details-section page-width"
+        aria-labelledby="details-title"
+      >
+        <div>
+          <p class="eyebrow">SMALL LIBRARY. CLEAR BOUNDARIES.</p>
+          <h2 id="details-title">Local agents.<br />Open connections.</h2>
+        </div>
+        <div class="details-copy">
+          <p>
+            Hypercore stores signed message logs on the local host. Hyperswarm
+            connects native agent peers. The browser uses WebRTC to reach its
+            local peer.
+          </p>
+          <p>
+            You choose which sessions the host exposes. A host ID identifies the
+            host. A session ID selects one registered session.
+          </p>
+          <p>
+            GitHub Pages serves this static app. Public Nostr relays help peers
+            find each other. The project operates no hosted chat server.
+            Optional TURN relays can incur costs.
+          </p>
+          <a class="text-link" href="https://github.com/GlenTiki/p2pme"
+            >Explore the library on GitHub <span aria-hidden="true">↗</span></a
+          >
+        </div>
+      </section>
+      <section
+        class="about-section page-width"
+        id="about"
+        aria-labelledby="about-title"
+      >
+        <div class="author-monogram" aria-hidden="true">gk.</div>
+        <div class="about-copy">
+          <p class="eyebrow">BUILT IN THE OPEN</p>
+          <h2 id="about-title">Hi, I’m Glen.</h2>
+          <p>
+            I build developer tools and agent integrations. p2pme is my project
+            to make local agent sessions easier to reach. Follow the work, read
+            the code, or find more of my projects on my website.
+          </p>
+          <div class="about-links">
+            <a class="text-link" href="https://glentiki.dev"
+              >Visit glentiki.dev <span aria-hidden="true">↗</span></a
+            ><a class="text-link" href="https://github.com/GlenTiki/p2pme"
+              >View the source <span aria-hidden="true">↗</span></a
+            >
+          </div>
+        </div>
+        <span class="about-note">A useful thing,<br />built to be shared.</span>
+      </section>
+    </main>
+    <footer class="site-footer page-width">
+      <a class="wordmark" href="/">p2pme</a>
+      <p>
+        Made by <a href="https://glentiki.dev">Glen Keane</a>. Open source under
+        MIT.
+      </p>
+      <a href="https://github.com/GlenTiki/p2pme/issues"
+        >Report an issue <span aria-hidden="true">↗</span></a
+      >
+    </footer>
+  </body>
+</html>

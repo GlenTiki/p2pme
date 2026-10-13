@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Set up a p2pme host for Claude Code and Codex. Learn how host IDs, session IDs, local approval and the p2pme skill work."
+    />
+    <meta name="theme-color" content="#f7f6ef" />
+    <title>Host setup — p2pme by Glen Keane</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#setup">Skip to host setup</a>
+    <header class="site-header page-width">
+      <a class="wordmark" href="/" aria-label="p2pme home"
+        ><span class="brand-icon" aria-hidden="true">p↔p</span>p2pme<span
+          class="version"
+          >early access</span
+        ></a
+      >
+      <nav aria-label="Main navigation">
+        <a href="/#app">Open app <span aria-hidden="true">↗</span></a
+        ><a href="/#about">About</a
+        ><a href="https://github.com/GlenTiki/p2pme"
+          >GitHub <span aria-hidden="true">↗</span></a
+        ><a class="author-link" href="https://glentiki.dev"
+          >Glen Keane <span aria-hidden="true">↗</span></a
+        >
+      </nav>
+    </header>
+    <main class="page-width guide-main" id="setup">
+      <section class="guide-intro" aria-labelledby="setup-title">
+        <p class="eyebrow">FOR PEOPLE AND THEIR AGENTS</p>
+        <h1 id="setup-title">Bring your<br /><span>own session.</span></h1>
+        <p class="hero-description">
+          Set up one local host. Register the sessions you want to reach. Pair
+          your phone when you are ready.
+        </p>
+        <p class="development-note">
+          Host setup is in development. These steps describe the intended
+          release. Check the repository for current support.
+        </p>
+      </section>
+      <div class="guide-layout">
+        <aside class="guide-index" aria-label="On this page">
+          <p class="eyebrow">HOST SETUP</p>
+          <ol>
+            <li><a href="#install">Install the library</a></li>
+            <li><a href="#register">Register a session</a></li>
+            <li><a href="#pair">Pair your browser</a></li>
+          </ol>
+          <a class="text-link" href="/skill.md"
+            >Read agent instructions <span aria-hidden="true">↗</span></a
+          >
+        </aside>
+        <div class="guide-content">
+          <section
+            class="guide-step"
+            id="install"
+            aria-labelledby="install-title"
+          >
+            <span class="step-number">01</span>
+            <div>
+              <h2 id="install-title">Install the library</h2>
+              <p>
+                The local host runs on your computer. The public website
+                supplies the browser app and instructions. It cannot install a
+                skill inside your agent.
+              </p>
+              <p>
+                The first release targets Node.js 22 or later. Review the source
+                and release before you install it.
+              </p>
+              <div class="code-block">
+                <span class="code-label">PLANNED RELEASE · 0.1.0</span
+                ><code
+                  >npm install
+                  https://github.com/GlenTiki/p2pme/releases/download/v0.1.0/glentiki-p2pme-0.1.0.tgz</code
+                >
+              </div>
+              <p class="field-help">
+                This release URL is provisional. Use it only after version 0.1.0
+                is published.
+              </p>
+              <p>
+                <a
+                  class="text-link"
+                  href="https://github.com/GlenTiki/p2pme/releases"
+                  >Check GitHub releases <span aria-hidden="true">↗</span></a
+                >
+              </p>
+            </div>
+          </section>
+          <section
+            class="guide-step"
+            id="register"
+            aria-labelledby="register-title"
+          >
+            <span class="step-number">02</span>
+            <div>
+              <h2 id="register-title">Register a session</h2>
+              <p>
+                Open this page from your agent session. Read the
+                <a href="/skill.md">p2pme skill instructions</a> and install the
+                versioned skill locally. Then run <code>/p2pme</code> in the
+                session you want to expose.
+              </p>
+              <div class="code-block">
+                <span class="code-label">AGENT SESSION · AFTER SKILL SETUP</span
+                ><code>/p2pme</code>
+              </div>
+              <dl class="id-definitions">
+                <div>
+                  <dt>Host ID</dt>
+                  <dd>
+                    Identifies your local host. Keep one host for the sessions
+                    you register on this computer.
+                  </dd>
+                </div>
+                <div>
+                  <dt>Session ID</dt>
+                  <dd>
+                    Identifies one registered agent session. Select this session
+                    after you connect to the host.
+                  </dd>
+                </div>
+              </dl>
+              <p>
+                The skill registers your chosen session. It does not expose
+                every session on your computer.
+              </p>
+              <div class="guide-notice">
+                <h3>Claude Code and Codex</h3>
+                <p>
+                  Claude Code requires a configured channel. You must register
+                  the channel and restart or resume Claude with that channel
+                  enabled.
+                </p>
+                <p>
+                  Codex requires a supported session adapter. The adapter must
+                  identify the selected thread. A new managed session must be
+                  labelled as new.
+                </p>
+                <p>
+                  A skill cannot attach to every running agent session. Follow
+                  the adapter instructions for your host.
+                </p>
+              </div>
+            </div>
+          </section>
+          <section class="guide-step" id="pair" aria-labelledby="pair-title">
+            <span class="step-number">03</span>
+            <div>
+              <h2 id="pair-title">Pair your browser</h2>
+              <ol class="instruction-list">
+                <li>Open <a href="/">p2pme.glentiki.dev</a> on your phone.</li>
+                <li>
+                  Name the browser and choose whether it should remember the
+                  host.
+                </li>
+                <li>
+                  Select Create invitation. Copy the agent prompt to your local
+                  session.
+                </li>
+                <li>
+                  Run <code>p2pme pair</code> in your own terminal. Paste the
+                  invitation when asked.
+                </li>
+                <li>Check the displayed scope. Approve the device locally.</li>
+                <li>Select a registered session to send a message.</li>
+              </ol>
+              <p>
+                You do not need an account. A remembered host lets you return to
+                its registered sessions. You can revoke the device separately
+                from a session.
+              </p>
+              <p>
+                Your agent keeps its local tool and file permissions. The
+                browser does not approve those actions for you.
+              </p>
+              <a class="button primary" href="/#app"
+                >Open the app <span aria-hidden="true">→</span></a
+              >
+            </div>
+          </section>
+          <section class="guide-footnote" aria-labelledby="transport-title">
+            <p class="eyebrow">UNDER THE HOOD</p>
+            <h2 id="transport-title">Two paths. One library.</h2>
+            <p>
+              Native agent peers use Hypercore message logs and Hyperswarm
+              connections. The browser uses WebRTC to reach the local peer.
+            </p>
+            <p>
+              GitHub Pages serves the static app. Public Nostr relays at nos.lol
+              and relay.damus.io carry encrypted discovery offers. Google and
+              Cloudflare STUN servers help peers connect. These services can see
+              connection metadata.
+            </p>
+            <p>
+              The app contacts those services only after you select Connect or
+              Create invitation. It operates no hosted chat server. Direct
+              connections can fail on restrictive networks. An operator can
+              supply TURN; that relay can incur costs.
+            </p>
+            <a class="text-link" href="https://github.com/GlenTiki/p2pme"
+              >Read the source and specifications
+              <span aria-hidden="true">↗</span></a
+            >
+          </section>
+        </div>
+      </div>
+    </main>
+    <footer class="site-footer page-width">
+      <a class="wordmark" href="/">p2pme</a>
+      <p>
+        Made by <a href="https://glentiki.dev">Glen Keane</a>. Open source under
+        MIT.
+      </p>
+      <a href="https://github.com/GlenTiki/p2pme/issues"
+        >Report an issue <span aria-hidden="true">↗</span></a
+      >
+    </footer>
+  </body>
+</html>

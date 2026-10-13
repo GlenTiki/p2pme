@@ -30,30 +30,41 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "build:sdk": "tsc -p tsconfig.build.json && esbuild src/index.ts --bundle --platform=browser --format=esm --target=es2022 --outfile=dist/index.js && esbuild src/node.ts --bundle --platform=node --format=esm --target=node22 --packages=external --outfile=dist/node.js",
-    "build": "npm run build:sdk",
+    "build": "npm run build:sdk && npm run build:web",
     "check": "npm run typecheck && npm run lint && npm run format:check && npm test && npm run build",
-    "example:native": "npm run build:sdk && node examples/native-peers.mjs"
+    "example:native": "npm run build:sdk && node examples/native-peers.mjs",
+    "build:web": "esbuild web/main.ts --bundle --format=esm --target=es2022 --minify --outfile=public/app.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.32.1",
     "hypercore": "11.38.0",
     "hyperdht": "6.34.1",
     "hyperswarm": "4.17.2",
+    "trystero": "0.26.0",
     "werift": "0.25.0",
     "ws": "8.22.0",
-    "zod": "4.6.7"
+    "zod": "4.6.7",
+    "@json-render/core": "0.21.0",
+    "@json-render/react": "0.21.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "5.20261013.1",
     "@eslint/js": "10.0.1",
+    "@trystero-p2p/ws-relay": "0.26.0",
     "@types/node": "22.20.5",
     "@types/ws": "8.18.2",
     "esbuild": "0.28.2",
     "eslint": "10.12.0",
+    "playwright": "1.61.0",
     "prettier": "3.9.10",
     "typescript": "6.0.3",
     "typescript-eslint": "8.71.2",
     "vitest": "5.0.4",
-    "wrangler": "4.150.0"
+    "wrangler": "4.150.0",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "jsdom": "29.1.1"
   }
 }
