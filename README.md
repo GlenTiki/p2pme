@@ -87,15 +87,15 @@ p2pme pair --scopes sessions:list,sessions:chat,sessions:create,tasks:delegate,u
 
 Paste the invitation through stdin. Review the expanded grant before approval. Browser controls do not grant their own permissions. A missing scope produces a visible error.
 
-The host fixes each provider profile's workspace and permission policy. Remote callers cannot change executable paths, arguments or environment variables. The initial profiles retain the provider's model default. The browser's **Delegate task** option applies to one message and then resets.
+The host fixes each provider profile's workspace and permission policy. Remote callers cannot change executable paths, arguments or environment variables. The initial profiles use `provider-default` as metadata and retain the provider's configured model. Their remote model allowlists are empty. The browser's **Delegate task** option applies to one message and then resets.
 
 An agent can publish a surface with `p2pme ui publish SESSION_ID FILE`. The JSON file names a UUIDv4 surface ID, a positive revision and a bounded component tree. The browser fetches the selected session's surface and accepts later updates from that host. A button sends `sessionId`, `surfaceId`, `revision`, `actionId` and current form values. The host checks the registered surface and grant before dispatch.
 
-The catalog contains Stack, Card, Text, TextInput, Select, Slider, Checkbox and Button. State changes can update text and show a conditional section. Surfaces cannot run JavaScript, fetch URLs, inject HTML or send automatic actions. See the [surface contract](docs/specs/006-agent-ui.md). The site's local demo uses the same renderer and never contacts an agent.
+The catalog contains Stack, Card, Text, TextInput, Select, Slider, Checkbox and Button. State changes can update text and show a conditional section. Surfaces cannot run JavaScript, fetch URLs, inject HTML or send automatic actions. See the [surface contract](https://github.com/GlenTiki/p2pme/blob/main/docs/specs/006-agent-ui.md). The site's local demo uses the same renderer and never contacts an agent.
 
 ## Use the library
 
-The browser entry exports protocol and surface validation. The Node entry adds session logs and peer connections.
+The root entry exports protocol and surface validation. `@glentiki/p2pme/node` adds logs, native peers, local hosts and provider adapters. `@glentiki/p2pme/browser` exports browser pairing and host connection APIs. Each entry includes TypeScript declarations. Browser bundles include their dependencies; Node bundles use installed dependencies. Handle validation errors at each boundary instead of comparing validator error classes across entry points.
 
 ```js
 import { randomUUID } from "node:crypto";
@@ -130,7 +130,7 @@ Run `npm run example:native` from a source checkout for a complete two-peer exch
 
 The browser does not run Hyperswarm. The host bridges browser requests into the selected local adapter. Browser device grants and native Noise peer descriptors are separate access mechanisms.
 
-Messages are at most 8 KiB. Surfaces are at most 24 KiB. Protocol frames are at most 32 KiB, including the surface envelope. A session log permits 2,048 entries. The host bounds its session and device lists. Reconnect starts a new host epoch; the client does not retry pending actions automatically. A timed-out action may have run. The native Claude reply wait ends after five minutes. A timeout or cancel stops the wait; Claude can still act on a delivered notification.
+Messages are at most 8 KiB. Surfaces are at most 24 KiB. Protocol frames are at most 32 KiB, including the surface envelope. A session log permits 2,048 entries. The host bounds its session and device lists. A host restart creates a new epoch; the client does not retry pending actions automatically. A timed-out action may have run. The native Claude reply wait ends after five minutes. A timeout or cancel stops the wait; Claude can still act on a delivered notification.
 
 Session logs use temporary local directories and remove them on clean close. They are not a transcript archive. The host persists its identity, session metadata and grants. A host restart does not automatically attach old provider sessions. Register or start the required session again.
 
@@ -148,12 +148,12 @@ Static files can use GitHub Pages or Cloudflare Pages without an operated applic
 
 ## Develop and publish
 
-`npm run check` runs types, lint, format checks, tests and production builds. Network tests use local peers and require local sockets. `npm run build` writes the library to `dist/` and the static site to `public/`. The build copies the packaged skill to `public/skill.md`.
+`npm run check` runs types, lint, format checks, tests, production builds and a clean package installation. Peer tests use local sockets. The package smoke test installs a local tarball and fetches dependencies from the public npm registry. Direct dependencies use exact versions; tarball consumers resolve transitive ranges. Run `npm run build` before a standalone `npm run test:package`. It imports the installed entries, runs CLI help and checks a browser bundle in Chromium. `npm run build` writes the library to `dist/` and the static site to `public/`. The build copies the packaged skill to `public/skill.md`. `npm pack` builds fresh artifacts through `prepack`.
 
-To opt into the local pre-commit check, run `git config --local core.hooksPath .githooks`. Installation never changes that setting. Read [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md) and the [code of conduct](CODE_OF_CONDUCT.md).
+To opt into the local pre-commit check, run `git config --local core.hooksPath .githooks`. Installation never changes that setting. Read [CONTRIBUTING.md](https://github.com/GlenTiki/p2pme/blob/main/CONTRIBUTING.md), [SECURITY.md](https://github.com/GlenTiki/p2pme/blob/main/SECURITY.md) and the [code of conduct](https://github.com/GlenTiki/p2pme/blob/main/CODE_OF_CONDUCT.md).
 
 GitHub Actions checks pull requests. The Pages workflow builds and uploads only `public/` on `main`, then deploys through the `github-pages` environment. Enable GitHub Pages with Actions as its source. Configure `p2pme.glentiki.dev` as a custom domain and verify DNS before advertising the site. A project URL under `/p2pme/` needs a base-path change because this app uses root-relative links. Cloudflare Pages can use the same build command and output directory.
 
-A `v0.1.0` tag must match package version `0.1.0`. The release workflow runs all checks, packs the package and attaches its tarball to the GitHub release. It does not publish to npm. See [CHANGELOG.md](CHANGELOG.md) for release changes.
+A `v0.1.0` tag must match package version `0.1.0`. The release workflow runs all checks, packs the package and attaches its tarball to the GitHub release. It does not publish to npm. See [CHANGELOG.md](https://github.com/GlenTiki/p2pme/blob/main/CHANGELOG.md) for release changes.
 
 MIT © Glen Keane. [More projects and contact](https://glentiki.dev).

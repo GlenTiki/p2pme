@@ -31,4 +31,4 @@ The project uses the MIT licence. Contributions use the same licence. No contrib
 
 Run `git config --local core.hooksPath .githooks` to enable the pre-commit check. The hook runs `npm run check`. The package does not change Git configuration during installation.
 
-The browser test uses Chromium, a loopback WebSocket relay and a local synthetic adapter. It makes no model request. Test runners need local TCP and UDP sockets.
+The browser test uses Chromium, a loopback WebSocket relay and a local synthetic adapter. The final package test installs a tarball from a temporary directory and fetches dependencies from the public npm registry. It makes no model request. Test runners need local TCP and UDP sockets.
