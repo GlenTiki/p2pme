@@ -1,0 +1,11 @@
+node_modules/
+dist/
+public/app.js
+.wrangler/
+.claude/
+.env*
+!.env.example
+coverage/
+test-results/
+*.tgz
+.DS_Store
