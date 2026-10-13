@@ -216,12 +216,26 @@ function checkTree(spec: AgentSurface["spec"]) {
 
 export function parseSurface(input: unknown): AgentSurface {
   const json = JSON.stringify(input);
-  if (typeof json !== "string" || new TextEncoder().encode(json).length > 32768)
-    throw new Error("A surface must fit in 32 KiB of JSON.");
+  if (typeof json !== "string" || new TextEncoder().encode(json).length > 24576)
+    throw new Error("A surface must fit in 24 KiB of JSON.");
   const surface = surfaceSchema.parse(input);
   checkTree(surface.spec);
   validateSurfaceValues(surface, surface.spec.state.form);
   return surface;
+}
+
+function editableFields(surface: AgentSurface): Set<string> {
+  const fields = new Set<string>();
+  for (const element of Object.values(surface.spec.elements)) {
+    if (element.type === "Checkbox")
+      fields.add(element.props.checked.$bindState.slice(6));
+    else if (
+      ["TextInput", "Select", "Slider"].includes(element.type) &&
+      "value" in element.props
+    )
+      fields.add(element.props.value.$bindState.slice(6));
+  }
+  return fields;
 }
 
 export function validateSurfaceValues(
@@ -235,6 +249,15 @@ export function validateSurfaceValues(
     fields.some((field) => !Object.hasOwn(values, field))
   )
     throw new Error("The surface form fields changed.");
+  const editable = editableFields(surface);
+  if (
+    fields.some(
+      (field) =>
+        !editable.has(field) &&
+        values[field] !== surface.spec.state.form[field],
+    )
+  )
+    throw new Error("A read-only surface value changed.");
   for (const element of Object.values(surface.spec.elements)) {
     if (element.visible) boundValue(values, element.visible.$state);
     checkControl(element, values);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseSurface } from "../src/surface.js";
+import { parseSurface, validateSurfaceValues } from "../src/surface.js";
 
 export function exampleSurface() {
   return {
@@ -50,6 +50,38 @@ export function exampleSurface() {
 }
 
 describe("surface validation", () => {
+  it("keeps visibility-only state immutable without an input binding", () => {
+    const surface = parseSurface(exampleSurface());
+    delete surface.spec.elements.toggle;
+    surface.spec.elements.root!.children = ["input", "preview", "send"];
+    expect(() =>
+      validateSurfaceValues(surface, { task: "Review", details: true }),
+    ).toThrow("read-only");
+  });
+  it("keeps display-only text immutable without an input binding", () => {
+    const surface = parseSurface(exampleSurface());
+    delete surface.spec.elements.input;
+    surface.spec.elements.root!.children = ["toggle", "preview", "send"];
+    expect(() =>
+      validateSurfaceValues(surface, { task: "Altered", details: false }),
+    ).toThrow("read-only");
+    expect(
+      validateSurfaceValues(surface, { task: "Review", details: true }),
+    ).toEqual({ task: "Review", details: true });
+  });
+  it("reserves envelope space with a 24 KiB surface limit", () => {
+    const surface = parseSurface(exampleSurface());
+    for (let i = 0; i < 6; i++) {
+      const id = `text${i}`;
+      surface.spec.elements[id] = {
+        type: "Text",
+        props: { text: "x".repeat(4096) },
+        children: [],
+      };
+      surface.spec.elements.root!.children.push(id);
+    }
+    expect(() => parseSurface(surface)).toThrow("24 KiB");
+  });
   it("rejects a surface ID that the host protocol cannot accept", () => {
     const surface = exampleSurface();
     surface.surfaceId = "019a8000-0000-7000-8000-000000000001";
