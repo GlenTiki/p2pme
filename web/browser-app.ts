@@ -65,6 +65,7 @@ class BrowserApp {
     this.bind("refresh-sessions", "click", () => this.refreshCurrentSessions());
     this.bind("forget-all-hosts", "click", () => {
       forgetAllHosts(this.deps.storage);
+      this.feedback("");
       this.renderHosts();
     });
     this.bind("copy-invitation", "click", () => this.copy("pairing-code"));

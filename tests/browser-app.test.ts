@@ -309,6 +309,19 @@ describe("browser connection controls", () => {
     expect(el("host-list").textContent).toContain("My phone");
     expect(el<HTMLButtonElement>("send-message").disabled).toBe(true);
   });
+  it("clears invalid saved-host feedback after the browser forgets it", async () => {
+    localStorage.setItem("p2pme.hosts.v1", "invalid");
+    app = createBrowserApp(document, deps);
+    expect(el("app-feedback").textContent).toContain(
+      "Saved host data is invalid",
+    );
+    el<HTMLButtonElement>("forget-all-hosts").click();
+    await tick();
+    expect(localStorage.getItem("p2pme.hosts.v1")).toBeNull();
+    expect(el("host-list").textContent).toContain("No saved hosts");
+    expect(el("app-feedback").textContent).toBe("");
+  });
+
   it("handles invalid saved data without a connection", () => {
     localStorage.setItem("p2pme.hosts.v1", "broken");
     app = createBrowserApp(document, deps);
