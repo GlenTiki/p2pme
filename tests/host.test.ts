@@ -683,6 +683,44 @@ describe("host lifecycle races", () => {
 });
 
 describe("reviewed host authority failures", () => {
+  it("permits provider defaults without approving model configuration", async () => {
+    const f = await setup();
+    await f.host.close();
+    const store = await openHostStore(f.directory);
+    const host = await createHost({
+      store,
+      now: () => now,
+      profiles: [
+        {
+          id: "test",
+          provider: "fake",
+          models: [],
+          defaultModelId: "provider-default",
+        },
+      ],
+      logFactory: async () => ({ async append() {}, async close() {} }),
+    });
+    hosts.push(host);
+    const adapter = detachedAdapter([], "default");
+    await host.attach({
+      profileId: "test",
+      providerSessionId: "provider-session",
+      label: "default",
+      adapter,
+    });
+    const request = {
+      version: 1,
+      id: crypto.randomUUID(),
+      hostId: host.hostId,
+      hostEpoch: host.hostEpoch,
+      op: "sessions.configure",
+      args: { sessionId: f.session.id, patch: { modelId: "provider-default" } },
+    };
+    const response = await host.dispatch(f.grant.id, request);
+    expect(response.ok).toBe(false);
+    if (!response.ok) expect(response.error.code).toBe("forbidden");
+  });
+
   it("detaches only the current adapter and retains the offline mapping", async () => {
     const f = await setup();
     const detached: string[] = [];

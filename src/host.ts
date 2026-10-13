@@ -580,7 +580,13 @@ export async function createHost(
   options: HostOptions,
 ): Promise<HostController> {
   for (const profile of options.profiles) {
-    if (!profile.models.includes(profile.defaultModelId))
+    if (
+      !profile.models.includes(profile.defaultModelId) &&
+      !(
+        profile.models.length === 0 &&
+        profile.defaultModelId === "provider-default"
+      )
+    )
       throw new Error("Default model is not in the local profile");
   }
   const host = new LocalHost(options);

@@ -16,7 +16,7 @@ export interface SessionAdapter {
     input: {
       id: string;
       text: string;
-      kind: "chat" | "task";
+      kind: "chat" | "task" | "ui-action";
       principal: "human-device" | "agent";
       signal: AbortSignal;
     },
