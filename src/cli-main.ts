@@ -167,10 +167,12 @@ async function host(
       const stop = () => {
         process.off("SIGINT", stop);
         process.off("SIGTERM", stop);
+        process.off("SIGHUP", stop);
         void daemon.close().then(done, reject);
       };
       process.once("SIGINT", stop);
       process.once("SIGTERM", stop);
+      process.once("SIGHUP", stop);
     });
   } finally {
     await terminal.close();

@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { PassThrough, Readable, Writable } from "node:stream";
+import { tmpdir } from "node:os";
 import { runCli } from "../src/cli-main.js";
+import { cliErrorMessage } from "../src/cli-error.js";
 import {
   approvalText,
   createTerminalApprover,
@@ -35,6 +37,34 @@ function fixture() {
   };
 }
 describe("local CLI", () => {
+  it("closes the host on SIGHUP and removes all shutdown listeners", async () => {
+    const signals = ["SIGINT", "SIGTERM", "SIGHUP"] as const;
+    const listeners = signals.map((signal) => process.listeners(signal));
+    let closes = 0;
+    let handlesHangup = false;
+    const running = runCli(["host", "--workspace", tmpdir()], {
+      ...fixture().options,
+      daemon: async () => {
+        setImmediate(() => {
+          handlesHangup =
+            process.listenerCount("SIGHUP") > listeners[2]!.length;
+          process.emit("SIGHUP");
+          if (!handlesHangup) process.emit("SIGTERM");
+        });
+        return {
+          host: { hostId: crypto.randomUUID() },
+          close: async () => {
+            closes++;
+          },
+        };
+      },
+    });
+    await running;
+    expect(handlesHangup).toBe(true);
+    expect(closes).toBe(1);
+    for (const [index, signal] of signals.entries())
+      expect(process.listeners(signal)).toEqual(listeners[index]);
+  });
   it("reuses one terminal across aborted approvals until host shutdown", async () => {
     let opens = 0;
     let closes = 0;
@@ -76,7 +106,7 @@ describe("local CLI", () => {
   it("propagates daemon shutdown failure through the CLI error path", async () => {
     const f = fixture();
     await expect(
-      runCli(["host", "--workspace", "/private/tmp"], {
+      runCli(["host", "--workspace", tmpdir()], {
         ...f.options,
         daemon: async () => {
           setImmediate(() => process.emit("SIGTERM"));
@@ -149,5 +179,52 @@ describe("local CLI", () => {
     expect(prompt).toContain("current and future registered sessions");
     expect(prompt).toContain("existing tools and return local file content");
     expect(prompt).toContain("/workspace");
+  });
+});
+
+describe("safe CLI startup errors", () => {
+  it.each([
+    "Host workspace identity changed; use a separate state directory",
+    "Missing workspace policy; use a separate state directory",
+    "Invalid daemon policy file",
+    "Invalid workspace",
+    "Host state must be a regular file",
+    "Host state path must be a directory",
+    "The local host requires macOS or Linux",
+    "Use absolute workspace and state paths",
+    "Control socket path is too long",
+    "Control directory must be private and owned by the current user",
+    "Control socket must be private and owned by the current user",
+  ])("reports the fixed startup error: %s", (message) => {
+    expect(cliErrorMessage(new Error(message))).toContain(message);
+  });
+  it.each([
+    new Error(
+      "Host store is already open; inspect host.lock before manual recovery",
+    ),
+    Object.assign(new Error("listen EADDRINUSE /secret/path"), {
+      code: "EADDRINUSE",
+    }),
+  ])("gives bounded manual recovery guidance for occupied state", (error) => {
+    const message = cliErrorMessage(error);
+    expect(message).toContain(
+      "Confirm all host processes that use this state directory have stopped",
+    );
+    expect(message).toContain("host.lock");
+    expect(message).toContain("control.sock");
+    expect(message).not.toContain("/secret/path");
+  });
+  it.each([
+    new Error("Control socket path is too long: private-invitation"),
+    Object.assign(new Error("EACCES private-invitation"), { code: "EACCES" }),
+    new SyntaxError('Unexpected token in {"secret":"private-invitation"}'),
+    new Error("provider failed: private-invitation"),
+    new Error("Local host rejected the request"),
+    { message: "private-invitation" },
+    "private-invitation",
+  ])("keeps unknown errors private", (error) => {
+    expect(cliErrorMessage(error)).toBe(
+      "p2pme command failed. Check the command and host terminal; run p2pme --help.",
+    );
   });
 });
