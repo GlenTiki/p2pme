@@ -77,7 +77,7 @@
               <div class="code-block">
                 <span class="code-label">PLANNED RELEASE · 0.1.0</span
                 ><code
-                  >npm install
+                  >npm install --global
                   https://github.com/GlenTiki/p2pme/releases/download/v0.1.0/glentiki-p2pme-0.1.0.tgz</code
                 >
               </div>
@@ -103,15 +103,36 @@
             <div>
               <h2 id="register-title">Register a session</h2>
               <p>
-                Open this page from your agent session. Read the
-                <a href="/skill.md">p2pme skill instructions</a> and install the
-                versioned skill locally. Then run <code>/p2pme</code> in the
-                session you want to expose.
+                Install the pinned release package from step 1. Copy its
+                packaged <code>skills/p2pme</code> folder into your project's
+                skill directory. The <a href="/skill.md">live skill page</a> is
+                reference text only. It cannot authorize a device or install
+                itself.
               </p>
               <div class="code-block">
-                <span class="code-label">AGENT SESSION · AFTER SKILL SETUP</span
-                ><code>/p2pme</code>
+                <span class="code-label"
+                  >LOCAL HOST · KEEP THIS TERMINAL OPEN</span
+                >
+                <code>p2pme host --workspace /absolute/path/to/project</code>
               </div>
+              <p>
+                Copy the packaged skill folder into your project's skill
+                directory. Codex uses <code>.agents/skills/p2pme</code>. Claude
+                Code uses <code>.claude/skills/p2pme</code>.
+              </p>
+              <p>
+                Invoke <code>$p2pme</code> in Codex or <code>/p2pme</code> in
+                Claude Code. The skill needs the exact current session ID.
+              </p>
+              <p>
+                Use <code>p2pme register codex THREAD_ID</code> for a supported
+                Codex thread. Use <code>p2pme start codex</code> or
+                <code>p2pme start claude</code> to create a new managed session.
+              </p>
+              <p>
+                Run <code>p2pme status</code> to check the host ID and session
+                IDs.
+              </p>
               <dl class="id-definitions">
                 <div>
                   <dt>Host ID</dt>
@@ -135,9 +156,17 @@
               <div class="guide-notice">
                 <h3>Claude Code and Codex</h3>
                 <p>
-                  Claude Code requires a configured channel. You must register
-                  the channel and restart or resume Claude with that channel
-                  enabled.
+                  For your current Claude session, run
+                  <code
+                    >p2pme claude-setup CLAUDE_SESSION_ID --output-dir
+                    /absolute/new-directory</code
+                  >. Use the exact session ID. The command creates separate
+                  configuration files and prints a resume command. Exit the
+                  selected Claude process first. Run the printed command from
+                  the host-approved workspace. Approve the native channel and
+                  MCP prompts. Do not run two copies of the same session. The
+                  setup command does not edit your existing settings or launch
+                  Claude.
                 </p>
                 <p>
                   Codex requires a supported session adapter. The adapter must
@@ -166,16 +195,31 @@
                   session.
                 </li>
                 <li>
-                  Run <code>p2pme pair</code> in your own terminal. Paste the
-                  invitation when asked.
+                  Run <code>p2pme pair --profiles codex</code> in your own
+                  terminal. Paste the invitation through stdin. End input with
+                  Ctrl-D.
                 </li>
-                <li>Check the displayed scope. Approve the device locally.</li>
+                <li>
+                  Check the displayed scope. Type <code>approve</code> at the
+                  foreground host terminal prompt.
+                </li>
                 <li>Select a registered session to send a message.</li>
               </ol>
               <p>
                 You do not need an account. A remembered host lets you return to
                 its registered sessions. You can revoke the device separately
-                from a session.
+                from a session. Use <code>p2pme revoke GRANT_ID</code> to revoke
+                host access.
+              </p>
+              <p>
+                Select <code>--profiles claude</code> for Claude or
+                <code>--profiles codex,claude</code> for both. A profile list is
+                required.
+              </p>
+              <p>
+                The default grant allows session lists and chat for registered
+                sessions. It expires after 30 days. An invitation is a bearer
+                secret. Its label does not prove a person's identity.
               </p>
               <p>
                 Your agent keeps its local tool and file permissions. The

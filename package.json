@@ -33,7 +33,7 @@
     "build": "npm run build:sdk && npm run build:web",
     "check": "npm run typecheck && npm run lint && npm run format:check && npm test && npm run build",
     "example:native": "npm run build:sdk && node examples/native-peers.mjs",
-    "build:web": "esbuild web/main.ts --bundle --format=esm --target=es2022 --minify --outfile=public/app.js"
+    "build:web": "esbuild web/main.ts --bundle --format=esm --target=es2022 --minify --outfile=public/app.js && cp skills/p2pme/SKILL.md public/skill.md"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.32.1",

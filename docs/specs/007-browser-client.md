@@ -7,7 +7,7 @@ The public app pairs a browser with a local host. It retains a host only when th
 ## Flow
 
 1. The visitor enters a device label and selects Create invitation. This is the first network action.
-2. The app displays the invitation and a copyable agent prompt. The prompt directs the agent to the host guide. The human runs `p2pme pair` and approves the device locally.
+2. The app displays the invitation and a copyable agent prompt. The prompt directs the agent to the host guide. The human runs `p2pme pair --profiles codex` and approves the device locally.
 3. The app waits for pairing, then connects to the permanent host room. It stores the grant only after the client validates the welcome and Remember host is selected.
 4. The app lists authorized registered sessions. Offline sessions remain visible and cannot accept a message.
 5. The visitor selects a session. Chat output comes only from correlated host events. Delegation and session creation use their explicit protocol operations. Scope errors remain visible.
@@ -23,7 +23,7 @@ Each connection attempt has a generation. Cancel, disconnect and replacement inv
 
 Cancel also aborts the pending host connection through `ClientOptions.signal`. It stops discovery before the handshake timeout. The generation changes before abort callbacks can run.
 
-`mountApprovedSurface(sessionId, surface)` accepts a surface only for the current selected session and sends typed `ui.action` requests through that same client. This export is an integration hook; this slice does not receive host surfaces. The host must register the surface before it accepts actions. The local demo stays separate.
+`mountApprovedSurface(sessionId, surface)` accepts a surface only for the current selected session and sends typed `ui.action` requests through that same client. The app receives authenticated `ui.render` events and fetches `ui.get` on selection or refresh. A selection token rejects late fetches after a session or connection change. Live updates invalidate pending fetches. Older revisions cannot replace the current surface. The host must register the surface before it accepts actions. The local demo stays separate.
 
 ## Acceptance criteria
 
@@ -41,3 +41,7 @@ Claude Sonnet 5.5 (`claude-sonnet-5-5`) reviewed the complete surface and browse
 The first review required separate storage validation for expired grants and complete prototype-key rejection in surfaces. Both fixes have regression tests. The second review accepted them. The implementer ran 108 tests, strict TypeScript, ESLint, scoped Prettier and both builds. Chromium checks passed at 1440, 390 and 320 pixels with no page-load network requests, errors or horizontal overflow.
 
 The review left these non-blocking follow-ups: disable saved-host Connect buttons while busy; use fixed storage error text; order overlapping refresh responses; clear old messages on disconnect and invitation text after success; reset delegation when a selected session goes offline; test successful clipboard copy; and improve recovery text for corrupt saved state. Surface delivery remains an explicit integration task.
+
+On 2026-10-13T18:43:14Z, Claude Sonnet 5.5 (`claude-sonnet-5-5`) accepted this revision. Full source bundle `f0a25acffc88412ffa7208bbe5d714794825d682dc6c7a40ad796cf14301e76c` had no code or workflow blocker. It required clearer session identity, replacement consent, human-only pairing and packaged-skill instructions. The text follow-up bundle `f0581454281d50703284e066c6803f27f625b40503a36487e743284a331afb86` resolved both blockers. Verdict: ACCEPT. The reviewer inspected source and text; it did not run commands.
+
+The implementer ran 119 tests, including a real Chromium-to-Node WebRTC flow through the host and surface registry. Strict TypeScript, ESLint, scoped Prettier and production builds passed. The skill validator passed. The generated public skill matched its packaged source. Workflow YAML and immutable Action references passed local checks. GitHub Actions and actual release deployment remain integration gates. The CLI and transport inputs have separate owners and reviews.

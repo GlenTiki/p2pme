@@ -5,6 +5,7 @@ import {
   createBrowserApp,
   type BrowserDependencies,
 } from "../web/browser-app.js";
+import type { JsonValue } from "../src/host-protocol.js";
 import type { HostClient, ClientOptions } from "../src/host-client.js";
 import type { ConnectionRecord } from "../src/rtc-identity.js";
 import { createEnvelope } from "../src/protocol.js";
@@ -52,7 +53,9 @@ beforeEach(() => {
   client = {
     hostId: host.hostId,
     hostEpoch: crypto.randomUUID(),
-    request: vi.fn(async () => ({ sessions: [session] })),
+    request: vi.fn(async (op) =>
+      op === "ui.get" ? { surface: null } : { sessions: [session] },
+    ),
     close: vi.fn(async () => {}),
   };
   deps = {
@@ -83,6 +86,40 @@ afterEach(async () => {
   });
 });
 describe("browser connection controls", () => {
+  it("loads selected agent controls and accepts newer live surfaces", async () => {
+    client.request = vi.fn(async (op) =>
+      op === "ui.get"
+        ? { surface: JSON.parse(JSON.stringify(demoSurface)) as JsonValue }
+        : { sessions: [session] },
+    );
+    app = createBrowserApp(document, deps);
+    await submit("connect-form");
+    acceptPair(host);
+    await tick();
+    await act(async () => {
+      el("session-list").querySelector<HTMLButtonElement>("button")!.click();
+      await tick();
+    });
+    expect(client.request).toHaveBeenCalledWith("ui.get", {
+      sessionId: session.id,
+    });
+    expect(el("agent-controls").hidden).toBe(false);
+    await act(async () => {
+      options?.onEvent?.(
+        createEnvelope(session.id, "ui.render", {
+          surface: { ...demoSurface, revision: 2 },
+        }),
+      );
+    });
+    await act(async () => {
+      el("session-surface").querySelector<HTMLButtonElement>("button")!.click();
+    });
+    expect(client.request).toHaveBeenCalledWith(
+      "ui.action",
+      expect.objectContaining({ revision: 2 }),
+    );
+  });
+
   it("honors an unchecked Remember option while the welcome is pending", async () => {
     let connected!: (value: HostClient) => void;
     deps.connect = vi.fn(
@@ -192,7 +229,9 @@ describe("browser connection controls", () => {
 
   it("clears delegation and old surfaces when a new session is selected", async () => {
     const next = { ...session, id: crypto.randomUUID(), label: "Second" };
-    client.request = vi.fn(async () => ({ sessions: [session, next] }));
+    client.request = vi.fn(async (op) =>
+      op === "ui.get" ? { surface: null } : { sessions: [session, next] },
+    );
     app = createBrowserApp(document, deps);
     await submit("connect-form");
     acceptPair(host);
@@ -213,7 +252,7 @@ describe("browser connection controls", () => {
     await act(async () => {
       oldButton.click();
     });
-    expect(client.request).toHaveBeenCalledTimes(1);
+    expect(client.request).toHaveBeenCalledTimes(3);
   });
   it("keeps a live connection when credential storage fails", async () => {
     deps.storage = {

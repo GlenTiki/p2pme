@@ -1,0 +1,202 @@
+import { createServer } from "node:http";
+import { readFile, mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { build } from "esbuild";
+import { chromium } from "playwright";
+import { createWsRelayServer } from "@trystero-p2p/ws-relay/server";
+import { joinRoom } from "@trystero-p2p/ws-relay";
+import { RTCPeerConnection } from "werift";
+import { expect, it } from "vitest";
+import { createHost, type SessionAdapter } from "../src/host.js";
+import { openHostStore } from "../src/host-store.js";
+import { approvePairing } from "../src/pairing.js";
+import { serveHostConnection } from "../src/host-connection.js";
+import { decodeInvitation, randomSecret } from "../src/rtc-identity.js";
+import type { RtcChannel } from "../src/rtc-channel.js";
+import { demoSurface } from "../web/demo.js";
+
+async function serveApp(network: { relayUrls: string[]; iceServers: never[] }) {
+  const source = `
+    import {createBrowserApp} from './web/browser-app.ts';
+    import {beginPairing} from './src/pairing.ts';
+    import {connectHost} from './src/host-client.ts';
+    import {joinRoom} from '@trystero-p2p/ws-relay';
+    const network={...${JSON.stringify(network)},join:joinRoom};
+    window.app=createBrowserApp(document,{
+      pair:label=>beginPairing(label,{network}),
+      connect:(grant,options)=>connectHost(grant,{...options,network}),
+      copy:async()=>{},storage:localStorage
+    });`;
+  const bundled = await build({
+    stdin: { contents: source, resolveDir: process.cwd() },
+    bundle: true,
+    write: false,
+    format: "esm",
+    platform: "browser",
+  });
+  const html = await readFile("public/index.html", "utf8");
+  const css = await readFile("public/styles.css", "utf8");
+  const server = createServer((request, response) => {
+    if (request.url === "/app.js") {
+      response.setHeader("Content-Type", "application/javascript");
+      response.end(bundled.outputFiles[0]!.text);
+    } else if (request.url === "/styles.css") {
+      response.setHeader("Content-Type", "text/css");
+      response.end(css);
+    } else {
+      response.setHeader("Content-Type", "text/html");
+      response.end(html);
+    }
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const address = server.address();
+  if (!address || typeof address === "string") throw Error("No HTTP port");
+  return {
+    url: `http://127.0.0.1:${address.port}`,
+    close: () => new Promise<void>((resolve) => server.close(() => resolve())),
+  };
+}
+
+it("pairs the real browser UI and delivers a typed surface action to the selected adapter", async () => {
+  const relay = createWsRelayServer({ port: 0, host: "127.0.0.1" });
+  await relay.ready;
+  const address = relay.address();
+  if (!address || typeof address === "string") throw Error("No relay port");
+  const network = {
+    relayUrls: [`ws://127.0.0.1:${address.port}`],
+    iceServers: [] as never[],
+  };
+  const native = {
+    ...network,
+    join: joinRoom,
+    rtcPolyfill:
+      RTCPeerConnection as unknown as typeof globalThis.RTCPeerConnection,
+  };
+  const directory = await mkdtemp(join(tmpdir(), "p2pme-browser-flow-"));
+  const store = await openHostStore(directory);
+  let permanent: RtcChannel | undefined;
+  const host = await createHost({
+    store,
+    profiles: [
+      {
+        id: "test",
+        provider: "test",
+        models: ["local"],
+        defaultModelId: "local",
+      },
+    ],
+    emit: async (_grantId, event) => {
+      await permanent?.send(JSON.stringify(event));
+    },
+  });
+  const submitted: string[] = [];
+  const adapter: SessionAdapter = {
+    submit: async (input, emit) => {
+      submitted.push(input.text);
+      await emit({ type: "completed", text: "Action received" });
+    },
+    configure: async () => {},
+    detach: async () => {},
+  };
+  const session = await host.attach({
+    profileId: "test",
+    providerSessionId: "synthetic",
+    label: "Browser test session",
+    adapter,
+  });
+  const grant = {
+    hostId: host.hostId,
+    grantId: crypto.randomUUID(),
+    roomId: crypto.randomUUID(),
+    secret: randomSecret(),
+    label: "Browser test",
+    expiresAt: new Date(Date.now() + 3600000)
+      .toISOString()
+      .replace(/\.\d{3}Z$/, "Z"),
+  };
+  const app = await serveApp(network);
+  const browser = await chromium.launch({
+    headless: true,
+    args: ["--disable-features=WebRtcHideLocalIpsWithMdns"],
+  });
+  try {
+    const page = await browser.newPage();
+    const errors: string[] = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    await page.goto(app.url);
+    await page.waitForFunction("window.app !== undefined");
+    await page.locator("#device-label").fill("Test browser");
+    await page.locator("#remember-host").check();
+    await page.locator("#connect-host").click();
+    const code = await page.locator("#pairing-code").inputValue();
+    await approvePairing(decodeInvitation(code), grant, {
+      network: native,
+      persist: () =>
+        store.update((state) => {
+          state.grants.push({
+            id: grant.grantId,
+            deviceId: crypto.randomUUID(),
+            principal: "human-device",
+            label: grant.label,
+            roomId: grant.roomId,
+            roomSecret: grant.secret,
+            createdAt: new Date().toISOString().replace(/\.\d{3}Z$/, "Z"),
+            expiresAt: grant.expiresAt,
+            revokedAt: null,
+            scopes: ["sessions:list", "ui:action"],
+            sessionAccess: [session.id],
+            profileIds: ["test"],
+          });
+        }),
+      activate: async () => {
+        permanent = serveHostConnection(grant, {
+          network: native,
+          hostEpoch: host.hostEpoch,
+          active: () => store.healthy,
+          dispatch: (frame) => host.dispatch(grant.grantId, JSON.parse(frame)),
+        });
+      },
+    });
+    await page
+      .getByRole("button", { name: "Browser test session · test", exact: true })
+      .click();
+    await page.waitForFunction(
+      "document.getElementById('selected-session').textContent.includes('Browser test session')",
+    );
+    await host.publishSurface(session.id, demoSurface);
+    const surface = page.locator("#session-surface");
+    await surface
+      .getByLabel("Task", { exact: true })
+      .fill("Review the peer boundary");
+    await surface.getByLabel("Show a task note").check();
+    expect(
+      await surface.getByRole("heading", { name: "Task note" }).isVisible(),
+    ).toBe(true);
+    await surface.getByRole("button", { name: "Try a local action" }).click();
+    await page.waitForFunction(
+      "document.getElementById('messages').textContent.includes('Action received')",
+    );
+    expect(submitted).toHaveLength(1);
+    expect(JSON.parse(submitted[0]!)).toMatchObject({
+      type: "ui.action",
+      sessionId: session.id,
+      surfaceId: demoSurface.surfaceId,
+      revision: 1,
+      actionId: "submit-task",
+      values: { task: "Review the peer boundary", details: true },
+    });
+    expect(
+      await page.evaluate("localStorage.getItem('p2pme.hosts.v1')"),
+    ).toContain(grant.hostId);
+    expect(errors).toEqual([]);
+    await page.evaluate("window.app.dispose()");
+  } finally {
+    await browser.close();
+    await permanent?.close();
+    await host.close();
+    await relay.close();
+    await app.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+}, 60000);

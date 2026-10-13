@@ -7,6 +7,8 @@ import {
 import type { SessionInfo } from "../src/host-protocol.js";
 import type { SurfaceAction } from "../src/surface.js";
 import { createSurfaceMount } from "./surface.js";
+import { createSurfaceDelivery } from "./surface-delivery.js";
+import type { Envelope } from "../src/protocol.js";
 import {
   actionButton,
   createConversation,
@@ -42,12 +44,19 @@ class BrowserApp {
   private connectionAbort: AbortController | null = null;
   private listeners: Array<() => void> = [];
   private readonly surface;
+  private readonly delivery;
+  private refreshSequence = 0;
   private readonly conversation;
   constructor(
     private readonly root: ParentNode,
     private readonly deps: BrowserDependencies,
   ) {
     this.surface = createSurfaceMount(this.element("session-surface"));
+    this.delivery = createSurfaceDelivery({
+      render: (sessionId, surface) => this.renderSurface(sessionId, surface),
+      clear: () => this.clearSurface(),
+      fail: (message) => this.feedback(message),
+    });
     this.conversation = createConversation(this.element("messages"));
     this.bind("connect-form", "submit", () => this.pair());
     this.bind("disconnect-host", "click", () => this.disconnect());
@@ -208,13 +217,7 @@ class BrowserApp {
     this.connectionAbort = abort;
     const client = await this.deps.connect(record, {
       signal: abort.signal,
-      onEvent: (event) => {
-        if (
-          generation === this.generation &&
-          event.sessionId === this.selected?.id
-        )
-          this.conversation.receive(event);
-      },
+      onEvent: (event) => this.receive(event, generation),
       onDisconnect: (error) => {
         if (generation === this.generation) {
           this.reset();
@@ -249,8 +252,10 @@ class BrowserApp {
   }
   private async refreshSessions(client: HostClient, generation: number) {
     if (generation !== this.generation) return;
+    const sequence = ++this.refreshSequence;
     const sessions = sessionList(await client.request("sessions.list", {}));
-    if (generation !== this.generation) return;
+    if (generation !== this.generation || sequence !== this.refreshSequence)
+      return;
     const list = this.element("session-list");
     list.replaceChildren();
     for (const session of sessions) {
@@ -271,17 +276,18 @@ class BrowserApp {
     }
     if (this.selected) this.updateSelected(sessions);
     this.controls();
+    await this.refreshSurface();
   }
   private async refreshCurrentSessions() {
     if (this.client) await this.refreshSessions(this.client, this.generation);
   }
   private updateSelected(sessions: SessionInfo[]) {
+    const wasOnline = this.selected?.online;
     this.selected =
       sessions.find((session) => session.id === this.selected?.id) ?? null;
     if (!this.selected?.online) {
-      this.surface.clearSurface();
-      this.element("agent-controls").hidden = true;
-    }
+      this.delivery.select(null);
+    } else if (!wasOnline) this.delivery.select(this.selected.id);
     this.element("selected-session").textContent = this.selected
       ? `${this.selected.label} · ${this.selected.id}${this.selected.online ? "" : " · offline"}`
       : "No session selected";
@@ -290,13 +296,32 @@ class BrowserApp {
     this.element<HTMLInputElement>("delegate-task").checked = false;
     this.selected = session;
     this.conversation.clear();
-    this.surface.clearSurface();
-    this.element("agent-controls").hidden = true;
+    this.delivery.select(session.id);
     this.element("selected-session").textContent =
       `${session.label} · ${session.id}`;
     this.element<HTMLTextAreaElement>("message-input").placeholder =
       "Message this session…";
     this.controls();
+    void this.refreshSurface();
+  }
+  private clearSurface() {
+    this.surface.clearSurface();
+    this.element("agent-controls").hidden = true;
+  }
+  private receive(event: Envelope, generation: number) {
+    if (generation !== this.generation || event.sessionId !== this.selected?.id)
+      return;
+    if (event.type === "ui.render")
+      this.delivery.receive(event.sessionId, event.payload.surface);
+    else this.conversation.receive(event);
+  }
+  private async refreshSurface() {
+    const client = this.client;
+    const session = this.selected;
+    if (client && session?.online)
+      await this.delivery.refresh(() =>
+        client.request("ui.get", { sessionId: session.id }),
+      );
   }
   private async send() {
     const client = this.client;
@@ -369,8 +394,11 @@ class BrowserApp {
   mountApprovedSurface(sessionId: string, surface: unknown) {
     if (!this.client || this.selected?.id !== sessionId)
       throw new Error("Select the surface's connected session first.");
+    this.delivery.receive(sessionId, surface);
+  }
+  private renderSurface(sessionId: string, surface: unknown) {
     const generation = this.generation;
-    const client = this.client;
+    const client = this.client!;
     this.surface.mountSurface(
       sessionId,
       surface,
@@ -393,8 +421,7 @@ class BrowserApp {
     this.sending = false;
     this.creating = false;
     this.element<HTMLInputElement>("delegate-task").checked = false;
-    this.surface.clearSurface();
-    this.element("agent-controls").hidden = true;
+    this.delivery.select(null);
     this.element("pairing-panel").hidden = true;
     this.element<HTMLTextAreaElement>("pairing-code").value = "";
     this.element<HTMLTextAreaElement>("agent-prompt").value = "";
