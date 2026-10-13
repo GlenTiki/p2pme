@@ -29,6 +29,11 @@ const sessionText = z.strictObject({ sessionId: id, text });
 export const hostRequestSchema = z.discriminatedUnion("op", [
   z.strictObject({
     ...requestBase,
+    op: z.literal("ui.get"),
+    args: z.strictObject({ sessionId: id }),
+  }),
+  z.strictObject({
+    ...requestBase,
     op: z.literal("sessions.list"),
     args: z.strictObject({}),
   }),

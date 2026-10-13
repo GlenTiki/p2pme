@@ -186,7 +186,11 @@ function receive(
   const value = record(JSON.parse(frame));
   if (typeof value.type === "string" && isId(value.sessionId)) {
     const event = decodeEnvelope(frame, value.sessionId);
-    if (event.replyTo && pending.has(event.replyTo)) onEvent?.(event);
+    if (
+      event.type === "ui.render" ||
+      (event.replyTo && pending.has(event.replyTo))
+    )
+      onEvent?.(event);
     return;
   }
   const response = validateResponse(value, hostId, epoch);

@@ -61,6 +61,7 @@ export interface HostController {
   readonly hostId: string;
   readonly hostEpoch: string;
   attach(attachment: Attachment): Promise<SessionInfo>;
+  publishSurface(sessionId: string, input: unknown): Promise<void>;
   sessions(): SessionInfo[];
   detach(sessionId: string, adapter: SessionAdapter): Promise<void>;
   dispatch(grantId: string, request: unknown): Promise<HostResponse>;

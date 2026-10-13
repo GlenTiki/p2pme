@@ -3,6 +3,7 @@ export const MAX_CHAT_BYTES = 8 * 1024;
 export const MAX_SESSION_ENTRIES = 2048;
 
 export interface Payloads {
+  "ui.render": { surface: Record<string, unknown> };
   "chat.send": { text: string };
   "chat.delta": { text: string };
   "chat.completed": { text: string };
@@ -57,6 +58,7 @@ const payloadChecks: Record<
   MessageType,
   (payload: Record<string, unknown>) => boolean
 > = {
+  "ui.render": (p) => jsonObject(p.surface),
   "chat.send": (p) =>
     string(p.text) &&
     p.text.length > 0 &&

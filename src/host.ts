@@ -1,5 +1,7 @@
+import { createSurfaceRegistry } from "./host-surfaces.js";
 import {
   createEnvelope,
+  type Envelope,
   isId,
   MAX_FRAME_BYTES,
   MAX_SESSION_ENTRIES,
@@ -34,7 +36,13 @@ const requiredScopes: Record<HostRequest["op"], Scope> = {
   "sessions.configure": "sessions:configure",
   "tasks.delegate": "tasks:delegate",
   "ui.action": "ui:action",
+  "ui.get": "sessions:list",
 };
+
+type SubmitRequest = Extract<
+  HostRequest,
+  { op: "sessions.chat" | "tasks.delegate" | "ui.action" }
+>;
 
 class HostFailure extends Error {
   constructor(
@@ -55,6 +63,7 @@ class LocalHost implements HostController {
     string,
     { grantId: string; requestId: string; abort: AbortController }
   >();
+  private readonly surfaces = createSurfaceRegistry();
   private closing: Promise<void> | null = null;
   private attaching: Promise<void> = Promise.resolve();
   constructor(private readonly options: HostOptions) {}
@@ -182,6 +191,7 @@ class LocalHost implements HostController {
   async detach(sessionId: string, adapter: SessionAdapter): Promise<void> {
     if (this.active.get(sessionId)?.adapter !== adapter) return;
     this.active.delete(sessionId);
+    this.surfaces.clear(sessionId);
     this.operations.get(sessionId)?.abort.abort();
     await adapter.detach();
   }
@@ -228,6 +238,7 @@ class LocalHost implements HostController {
       this.assertOpen();
       const previous = this.active.get(metadata.id);
       this.active.delete(metadata.id);
+      this.surfaces.clear(metadata.id);
       await previous?.adapter.detach();
       this.assertOpen();
       this.active.set(metadata.id, { metadata, adapter: attachment.adapter });
@@ -274,6 +285,11 @@ class LocalHost implements HostController {
     try {
       this.authorize(grantId, request);
       this.consume(grantId, request.id);
+      if (request.op === "ui.get")
+        return this.success(
+          request.id,
+          this.surfaceResult(request.args.sessionId),
+        );
       return await this.execute(grantId, request);
     } catch (error) {
       return this.failure(request.id, error);
@@ -361,18 +377,84 @@ class LocalHost implements HostController {
         return this.configure(grantId, request);
       case "sessions.chat":
       case "tasks.delegate":
-        return this.submit(grantId, request, signal);
       case "ui.action":
-        throw new HostFailure(
-          "unsupported",
-          "UI actions require an approved surface registry",
-        );
+        return this.submit(grantId, request, signal);
+      case "ui.get":
+        return this.surfaceResult(request.args.sessionId);
     }
+  }
+
+  private surfaceResult(sessionId: string): Record<string, JsonValue> {
+    return {
+      surface: JSON.parse(
+        JSON.stringify(this.surfaces.get(sessionId)),
+      ) as JsonValue,
+    };
+  }
+
+  async publishSurface(sessionId: string, input: unknown): Promise<void> {
+    this.assertOpen();
+    const session = this.active.get(sessionId);
+    if (!session) throw new HostFailure("offline", "Session is offline");
+    let envelope!: Envelope;
+    await this.surfaces.publish(sessionId, input, async (value) => {
+      this.assertSurfaceSession(sessionId, session);
+      envelope = createEnvelope(sessionId, "ui.render", {
+        surface: value,
+      });
+      await (await this.logPair(sessionId)).egress.append(envelope);
+      this.assertSurfaceSession(sessionId, session);
+    });
+    this.assertSurfaceSession(sessionId, session);
+    const results = await Promise.allSettled(
+      this.options.store.snapshot().grants.map(async (grant) => {
+        if (!this.surfaceViewer(grant.id, session.metadata)) return;
+        await this.options.emit?.(grant.id, envelope);
+      }),
+    );
+    if (results.some((result) => result.status === "rejected"))
+      throw new HostFailure(
+        "delivery",
+        "Surface recorded; a device did not receive it",
+      );
+  }
+
+  private assertSurfaceSession(
+    sessionId: string,
+    session: ActiveSession,
+  ): void {
+    this.assertOpen();
+    if (this.active.get(sessionId) !== session)
+      throw new HostFailure("stale", "Session adapter changed");
+  }
+
+  private surfaceViewer(grantId: string, session: SessionMetadata): boolean {
+    let grant: Grant;
+    try {
+      grant = this.grant(grantId);
+    } catch {
+      return false;
+    }
+    return (
+      grant.scopes.includes("sessions:list") && this.visible(grant, session)
+    );
+  }
+
+  private submission(request: SubmitRequest): {
+    text: string;
+    kind: "chat" | "task" | "ui-action";
+  } {
+    if (request.op === "ui.action")
+      return { text: this.surfaces.action(request.args), kind: "ui-action" };
+    return {
+      text: request.args.text,
+      kind: request.op === "tasks.delegate" ? "task" : "chat",
+    };
   }
 
   private async submit(
     grantId: string,
-    request: Extract<HostRequest, { op: "sessions.chat" | "tasks.delegate" }>,
+    request: SubmitRequest,
     signal: AbortSignal,
   ): Promise<Record<string, JsonValue>> {
     const session = this.active.get(request.args.sessionId)!;
@@ -394,8 +476,7 @@ class LocalHost implements HostController {
       await session.adapter.submit(
         {
           id: request.id,
-          text: request.args.text,
-          kind: request.op === "tasks.delegate" ? "task" : "chat",
+          ...this.submission(request),
           principal: this.grant(grantId).principal,
           signal,
         },
@@ -561,9 +642,10 @@ class LocalHost implements HostController {
   }
   private async dispose(): Promise<void> {
     for (const operation of this.operations.values()) operation.abort.abort();
-    const adapters = [...this.active.values()].map((session) =>
-      session.adapter.detach(),
-    );
+    const adapters = [...this.active.values()].map((session) => {
+      this.surfaces.clear(session.metadata.id);
+      return session.adapter.detach();
+    });
     this.active.clear();
     const logs = [...this.logs.values()].map(async (pair) => {
       const { ingress, egress } = await pair;
