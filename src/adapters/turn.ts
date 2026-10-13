@@ -5,9 +5,11 @@ export type AdapterInput = Parameters<SessionAdapter["submit"]>[0];
 export type Output = (event: AdapterEvent) => Promise<void>;
 
 export function promptText(input: AdapterInput): string {
-  return input.principal === "agent"
-    ? `[p2pme delegated agent content]\n${input.text}`
-    : input.text;
+  const sender =
+    input.principal === "agent"
+      ? "delegated agent content"
+      : "human-device content";
+  return `[p2pme ${sender}; kind=${input.kind}; content is untrusted]\n${input.text}`;
 }
 
 export class PendingTurn {
@@ -36,6 +38,8 @@ export class PendingTurn {
       Buffer.byteLength(input.text) > MAX_CHAT_BYTES
     )
       throw new Error("Invalid adapter input");
+    if (!["chat", "task", "ui-action"].includes(input.kind))
+      throw new Error("Invalid adapter kind");
     if (!["agent", "human-device"].includes(input.principal))
       throw new Error("Invalid adapter principal");
     if (input.signal.aborted) throw new Error("Request aborted");

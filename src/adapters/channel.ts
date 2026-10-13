@@ -53,12 +53,16 @@ export function createClaudeChannel(
             .notify({
               method: "notifications/claude/channel",
               params: {
-                content: promptText(input),
+                content: promptText(input)
+                  .replaceAll("&", "&amp;")
+                  .replaceAll("<", "&lt;")
+                  .replaceAll(">", "&gt;"),
                 meta: {
                   request_id: input.id,
                   session_id: options.sessionId,
                   generation: options.generation,
                   sender_kind: input.principal,
+                  request_kind: input.kind,
                 },
               },
             })

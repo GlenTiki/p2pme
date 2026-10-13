@@ -25,6 +25,7 @@ interface ActiveTurn {
 }
 export interface CodexAttachOptions {
   threadId: string;
+  expectedCwd?: string;
   transport?: JsonTransport;
   spawn?: ProcessSpawner;
 }
@@ -212,6 +213,7 @@ export async function attachCodex(
   options: CodexAttachOptions,
 ): Promise<SessionAdapter> {
   providerId(options.threadId);
+  if (options.expectedCwd !== undefined) localDirectory(options.expectedCwd);
   const transport =
     options.transport ??
     spawnJsonProcess(
@@ -228,6 +230,8 @@ export async function attachCodex(
       includeTurns: false,
     });
     const thread = record(result.thread);
+    if (options.expectedCwd !== undefined && thread.cwd !== options.expectedCwd)
+      throw new Error("Codex workspace does not match local profile");
     if (
       thread.id !== options.threadId ||
       !["idle", "active"].includes(String(record(thread.status).type))
