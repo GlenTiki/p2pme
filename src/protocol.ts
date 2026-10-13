@@ -9,6 +9,16 @@ export interface Payloads {
   "session.status": { state: "ready" | "busy" | "disconnected" };
   "session.disconnect": { reason: string };
   error: { code: string; message: string };
+  "host.request": {
+    requestId: string;
+    op: string;
+    args: Record<string, unknown>;
+  };
+  "host.result": {
+    requestId: string;
+    ok: boolean;
+    result: Record<string, unknown>;
+  };
 }
 
 export type MessageType = keyof Payloads;
@@ -27,7 +37,7 @@ export type Envelope = {
 export function isId(value: unknown): value is string {
   return (
     typeof value === "string" &&
-    /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(
       value,
     )
   );
@@ -57,7 +67,15 @@ const payloadChecks: Record<
     string(p.state) && ["ready", "busy", "disconnected"].includes(p.state),
   "session.disconnect": (p) => string(p.reason),
   error: (p) => string(p.code) && string(p.message),
+  "host.request": (p) =>
+    isId(p.requestId) && string(p.op) && jsonObject(p.args),
+  "host.result": (p) =>
+    isId(p.requestId) && typeof p.ok === "boolean" && jsonObject(p.result),
 };
+
+function jsonObject(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
 
 function validateHeader(
   value: Record<string, unknown>,

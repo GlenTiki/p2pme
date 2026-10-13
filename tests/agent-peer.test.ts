@@ -7,6 +7,7 @@ import {
   connectAgentPeer,
   createNoiseKeyPair,
   type AgentPeer,
+  type PeerSocket,
   type SwarmOptions,
 } from "../src/agent-peer.js";
 import { createEnvelope } from "../src/protocol.js";
@@ -108,8 +109,18 @@ describe("native peer boundary", () => {
       const secondLog = await writer();
       const firstKey = createNoiseKeyPair();
       const secondKey = createNoiseKeyPair();
-      const swarmFactory = (options: SwarmOptions) =>
-        new Hyperswarm({ ...options, dht: network.createNode() });
+      const secondSockets: PeerSocket[] = [];
+      const swarmFactory = (options: SwarmOptions) => {
+        const swarm = new Hyperswarm({ ...options, dht: network.createNode() });
+        if (
+          Buffer.from(options.keyPair.publicKey).equals(secondKey.publicKey)
+        ) {
+          swarm.on("connection", (socket: PeerSocket) =>
+            secondSockets.push(socket),
+          );
+        }
+        return swarm;
+      };
       const [first, second] = await Promise.all([
         connectAgentPeer({
           localKeyPair: firstKey,
@@ -135,6 +146,8 @@ describe("native peer boundary", () => {
         }),
       ]);
       peers.push(first, second);
+      expect(first.incoming.publicKey).toEqual(secondLog.publicKey);
+      expect(second.incoming.publicKey).toEqual(firstLog.publicKey);
       const command = createEnvelope(sessionId, "chat.send", {
         text: "Local DHT request",
       });
@@ -142,6 +155,23 @@ describe("native peer boundary", () => {
       await expect
         .poll(() => second.incoming.get(0), { timeout: 15000 })
         .toEqual(command);
+      const unregistered = await writer();
+      await unregistered.append(
+        createEnvelope(sessionId, "chat.send", {
+          text: "Private unrelated core",
+        }),
+      );
+      const unregisteredReader = await createSessionLog({
+        sessionId,
+        key: unregistered.publicKey,
+      });
+      logs.push(unregisteredReader);
+      await expect
+        .poll(() => secondSockets.filter((socket) => !socket.destroyed))
+        .toHaveLength(1);
+      unregisteredReader.replicate(
+        secondSockets.find((socket) => !socket.destroyed)!,
+      );
       const reply = createEnvelope(
         sessionId,
         "chat.completed",
@@ -152,8 +182,68 @@ describe("native peer boundary", () => {
       await expect
         .poll(() => first.incoming.get(0), { timeout: 15000 })
         .toEqual(reply);
+      expect(await unregisteredReader.get(0)).toBeNull();
       await Promise.all([first.disconnect(), second.disconnect()]);
     } finally {
+      await network.destroy();
+    }
+  }, 30000);
+
+  it("rejects an unapproved identity during a real Noise handshake", async () => {
+    const network = await createTestnet(3);
+    const intruderKey = createNoiseKeyPair();
+    const hostKey = createNoiseKeyPair();
+    const approvedKey = createNoiseKeyPair();
+    const intruder = new Hyperswarm({
+      keyPair: intruderKey,
+      maxPeers: 1,
+      firewall: () => false,
+      dht: network.createNode(),
+    });
+    const checked: Uint8Array[] = [];
+    const connected: PeerSocket[] = [];
+    try {
+      const outgoing = await writer();
+      const remoteLog = await writer();
+      const host = await connectAgentPeer({
+        localKeyPair: hostKey,
+        outgoing,
+        remote: {
+          sessionId,
+          noiseKey: approvedKey.publicKey,
+          logKey: remoteLog.publicKey,
+        },
+        swarmFactory: (options) => {
+          const swarm = new Hyperswarm({
+            ...options,
+            dht: network.createNode(),
+            firewall: (key) => {
+              checked.push(key);
+              return options.firewall(key);
+            },
+          });
+          swarm.on("connection", (socket: PeerSocket) =>
+            connected.push(socket),
+          );
+          return swarm;
+        },
+      });
+      peers.push(host);
+      await intruder.listen();
+      intruder.joinPeer(hostKey.publicKey);
+      await expect
+        .poll(
+          () =>
+            checked.some((key) =>
+              Buffer.from(key).equals(intruderKey.publicKey),
+            ),
+          { timeout: 15000 },
+        )
+        .toBe(true);
+      expect(connected).toHaveLength(0);
+      await host.disconnect();
+    } finally {
+      await intruder.destroy();
       await network.destroy();
     }
   }, 30000);

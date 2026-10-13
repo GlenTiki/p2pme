@@ -43,6 +43,9 @@ describe("signed session logs", () => {
     ).rejects.toThrow();
     await log.append(message);
     await expect(log.append(message)).rejects.toThrow();
+    await expect(
+      log.append({ ...message, id: message.id.toUpperCase() }),
+    ).rejects.toThrow();
     expect(log.length).toBe(1);
   });
 
@@ -195,4 +198,22 @@ describe("untrusted signed log input", () => {
         .toBe(true);
     });
   });
+
+  it("rejects metadata beyond 64 MiB even with fewer than 2048 blocks", async () => {
+    await withRawWriter(async (writer, reader) => {
+      await writer.append(
+        Array.from({ length: 5 }, () => "x".repeat(14 * 1024 * 1024)),
+      );
+      expect(writer.length).toBe(5);
+      expect(writer.byteLength).toBeGreaterThan(64 * 1024 * 1024);
+      await expect
+        .poll(() =>
+          reader.get(0).then(
+            () => false,
+            () => true,
+          ),
+        )
+        .toBe(true);
+    });
+  }, 20000);
 });

@@ -92,6 +92,11 @@ describe("protocol boundary", () => {
     const frame = JSON.stringify(command);
     expect(receiver.receive(frame)).toEqual(command);
     expect(() => receiver.receive(frame)).toThrow();
+    expect(() =>
+      receiver.receive(
+        JSON.stringify({ ...command, id: command.id.toUpperCase() }),
+      ),
+    ).toThrow();
   });
 
   it("does not consume an ID when its frame fails validation", () => {
