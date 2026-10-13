@@ -54,9 +54,19 @@ Select **Remember host** before the connection completes to store this device's 
 
 The default state directory is `~/.p2pme`. Each command accepts `--state-dir /absolute/path` for a separate host. Keep that directory private. Stop the foreground host with Ctrl-C.
 
+A crash or forced termination can leave `host.lock` and `control.sock` in the state directory. The host refuses automatic removal because another process could still own them.
+
+1. Confirm that every host process that uses that state directory has stopped.
+2. Remove only `host.lock` and `control.sock` from that directory.
+3. Start the host again with the same workspace and state directory.
+
+Keep `host.json` and `daemon.json`; they hold the identity, grants and workspace policy. A changed workspace identity needs a separate state directory and new device approval.
+
 ## Use your current agent session
 
-A skill guides setup. It does not inject messages into arbitrary processes.
+A skill guides setup. It does not inject messages into arbitrary processes. Automated tests use simulated providers; live CLI compatibility remains [an explicit verification task](https://github.com/GlenTiki/p2pme/issues/2).
+
+The app shows replies to remote requests. It does not mirror unrelated local turns or prior transcript history. [Transcript observation](https://github.com/GlenTiki/p2pme/issues/1) is a separate read capability. Provider APIs deliver remote input; editing a transcript file is not a supported write path.
 
 For an existing Codex thread, run `p2pme register codex THREAD_ID`. Supply the exact thread ID from the supported session interface. An attachment failure remains an error. The command does not silently replace the session.
 
@@ -132,6 +142,8 @@ The browser does not run Hyperswarm. The host bridges browser requests into the 
 
 Messages are at most 8 KiB. Surfaces are at most 24 KiB. Protocol frames are at most 32 KiB, including the surface envelope. A session log permits 2,048 entries. The host bounds its session and device lists. A host restart creates a new epoch; the client does not retry pending actions automatically. A timed-out action may have run. The native Claude reply wait ends after five minutes. A timeout or cancel stops the wait; Claude can still act on a delivered notification.
 
+When a log fills or fails, the host rejects further operations that use it. Restart the host to open fresh logs. The last request may already have reached the provider; inspect the session before you retry.
+
 Session logs use temporary local directories and remove them on clean close. They are not a transcript archive. The host persists its identity, session metadata and grants. A host restart does not automatically attach old provider sessions. Register or start the required session again.
 
 The local daemon uses a private Unix socket. Local processes under your user account remain trusted. Remote text stays subject to the provider's tool and file permissions. Chat and task grants can invoke that session's existing tools and return local file content. Pair only devices that you trust to submit prompts to that workspace.
@@ -140,7 +152,7 @@ The local daemon uses a private Unix socket. Local processes under your user acc
 
 The static app has no account system, analytics, external fonts or hosted chat backend. Page load does not join a peer network. **Connect** and **Create invitation** start discovery. A host restart restores its active approved peer rooms.
 
-Public Nostr relays at `nos.lol` and `relay.damus.io` carry encrypted discovery offers. Google and Cloudflare STUN servers help establish connections. These services can observe connection metadata. Peer traffic uses WebRTC transport encryption. An invitation and a stored device grant contain access secrets; do not publish them.
+Public Nostr relays at `nos.lol` and `relay.damus.io` carry encrypted discovery offers. Google and Cloudflare STUN servers help establish connections. These services can observe connection metadata. Peer traffic uses WebRTC transport encryption. An invitation and a stored device grant contain access secrets; do not publish them. If you paste the generated setup prompt into an agent, its provider receives the invitation too.
 
 A remembered grant is readable by scripts on the site's origin. The browser stores no transcript in local storage. Browser extensions and other software on the device remain outside this boundary. Model providers receive the prompts and context their local adapters submit under your existing account.
 

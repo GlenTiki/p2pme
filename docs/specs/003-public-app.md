@@ -1,30 +1,35 @@
 # Public app and host setup
 
-Glen requested a personal promotion project. The app links to [his website](https://glentiki.dev) and the public source repository. The intended domain is `p2pme.glentiki.dev`.
+## Intent
+
+The app demonstrates p2pme and presents Glen's work. It links to [his website](https://glentiki.dev) and [the source repository](https://github.com/GlenTiki/p2pme). GitHub Pages serves the static build at `p2pme.glentiki.dev`.
 
 ## Routes and behaviour
 
-`/` serves the browser app and project introduction. A new visitor can connect to a host or open the host setup guide. A returning visitor sees their remembered hosts. A connected host supplies its registered sessions. The visitor selects a session before they send a message.
+`/` contains the project introduction, browser workspace, local surface demo and About Glen section. A visitor can create a device invitation or connect to a remembered host. A connected host lists sessions within the approved grant. The visitor selects a session before a message or action.
 
-`/host` serves the agent setup guide and versioned skill instructions. Local setup creates a stable host ID. `/p2pme` registers a Claude Code or Codex session with that host. Each session has a separate session ID. The guide explains Claude's channel registration and restart requirement. It must not claim universal hot attachment.
+`/host/` contains local setup instructions. `/skill.md` serves the skill as text. The package contains the installable skill. Setup creates a stable host ID and distinct session IDs. Claude instructions state the Channel setup and resume requirement.
 
-The browser retains a host connection only after the user approves that option. Host approval does not publish unrelated local session history. The host exposes sessions registered through p2pme. Device revocation and session removal remain distinct actions.
+The browser remembers credentials only when the visitor selects that option. Later visits require explicit Connect. Forget removes the browser copy. Host revocation invalidates the grant. Neither action deletes an unrelated provider transcript.
 
-The app includes an About Glen section with direct website and repository links. Copy states what the project does. It uses short sentences, active voice and consistent terms. It contains no invented adoption figures, testimonials, credentials or unsupported security claims.
+The public demo uses the same bounded renderer as the connected app. It is labelled as a local demo. It does not contact a provider or simulate a successful host connection.
 
-## Visual direction
+## Presentation
 
-Use a light paper background, dark ink, a restrained green accent and clear monospace labels for IDs. Give the project introduction and the working app equal attention. Use a simple node diagram to explain the host and browser relationship. Keep the interface usable on a phone.
+The interface uses a light paper background, dark text and green accents. IDs use a monospace font. A simple diagram explains the browser and host relationship. The project introduction and working app both remain visible on a phone.
+
+Copy uses short active sentences and consistent terms. It contains no invented adoption figures, endorsements or security claims. No analytics, external fonts or peer discovery run on page load.
 
 ## Acceptance criteria
 
 1. Navigation reaches the app, host guide, About Glen, website and repository.
-2. The app has real host, session and message states. Empty states explain the next action. No fake response is presented as a live agent.
-3. Copy controls report failure as well as success. Form controls have labels. Status changes use accessible announcements.
-4. The mobile layout has no horizontal overflow. Keyboard users can reach and identify every action.
-5. Host and session IDs remain distinct in the UI and protocol. A session is selected before a prompt can be sent.
-6. The final cost explanation matches the chosen deployment. The automatic rendezvous decision remains pending, so this slice may prepare static presentation only.
+2. Connection and session states reflect real host responses. Empty states explain the next action.
+3. Copy controls report success and failure. Form controls have labels. Status changes use accessible announcements.
+4. The phone layout has no horizontal overflow. Keyboard users can identify and reach each action.
+5. Host and session IDs remain distinct. The selected session controls message and surface dispatch.
+6. The cost explanation identifies static hosting, public discovery services and optional relay costs.
+7. A real browser test covers pair, connect, select, surface update, input and typed action delivery.
 
 ## Review record
 
-The user directly specified the routes, persistent host relation, session picker, personal branding and website link. Static presentation can proceed while the hosted rendezvous choice remains open. Final functional integration requires the host protocol specification and independent review.
+Glen specified the public routes, remembered host, session picker, personal branding and website link. The [browser client](007-browser-client.md) and [surface specification](006-agent-ui.md) record independent reviews of their implementation. This revision updates the original presentation brief to the selected transport and deployment. The release checks must also verify the deployed build.

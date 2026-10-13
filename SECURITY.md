@@ -20,7 +20,7 @@ A paired device can submit prompts to the selected local agent. Treat an invitat
 
 ## Device access
 
-An invitation is a bearer secret. Anyone with a copied invitation can race the intended browser during pairing. The terminal prompt approves the displayed label and scopes. It does not prove a person's identity. Keep invitations private and create a fresh one if exposure is possible.
+An invitation is a bearer secret. Anyone with a copied invitation can race the intended browser during pairing. The terminal prompt approves the displayed label and scopes. It does not prove a person's identity. Keep invitations private and create a fresh one if exposure is possible. The app can include the invitation in a copied agent setup prompt. Pasting that prompt into an agent sends the invitation to its model provider and can retain it in the conversation.
 
 A remembered grant contains permanent room credentials until expiry or revocation. Scripts on the app's origin can read browser storage. Forget removes the local copy; `p2pme revoke GRANT_ID` revokes the grant at the host. Do not share browser profiles that hold device access.
 
