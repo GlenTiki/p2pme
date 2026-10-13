@@ -142,3 +142,61 @@ it("keeps an incumbent handshake alive when a second peer is refused", async () 
   await first;
   await channel.close();
 });
+
+it.each(["send", "receive", "validate"])(
+  "releases a failed %s handshake without a join-error callback",
+  async (stage) => {
+    let handshake!: NonNullable<
+      NonNullable<
+        Parameters<
+          NonNullable<import("../src/rtc-channel.js").RtcNetwork["join"]>
+        >[2]
+      >["onPeerHandshake"]
+    >;
+    let rejectHello = stage === "validate";
+    const channel = openRtcChannel(
+      {
+        credentials: createInvitation("Test"),
+        hello: { role: "host" },
+        acceptHello: () => {
+          if (rejectHello) throw new Error("Invalid hello");
+        },
+      },
+      {
+        join: (_config, _room, options) => {
+          handshake = options!.onPeerHandshake!;
+          return {
+            makeAction: () => ({ send: async () => {} }),
+            leave: async () => {},
+          } as unknown as import("trystero").Room;
+        },
+      },
+    );
+    try {
+      await expect(
+        handshake(
+          "failed",
+          async () => {
+            if (stage === "send") throw new Error("Closed during send");
+          },
+          async () => {
+            if (stage === "receive") throw new Error("Closed during receive");
+            return { data: "{}" };
+          },
+          false,
+        ),
+      ).rejects.toThrow();
+      rejectHello = false;
+      await expect(
+        handshake(
+          "valid",
+          async () => {},
+          async () => ({ data: "{}" }),
+          false,
+        ),
+      ).resolves.toBeUndefined();
+    } finally {
+      await channel.close();
+    }
+  },
+);

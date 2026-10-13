@@ -75,13 +75,18 @@ export function openRtcChannel(
       handshakeTimeoutMs: 10000,
       onPeerHandshake: async (peerId, send, receive) => {
         slot.claim(peerId);
-        if (closed) throw new Error("Connection is closed");
-        await send(JSON.stringify(options.hello));
-        const remote = await receive();
-        if (typeof remote.data !== "string" || remote.data.length > 1024)
-          throw new Error("Invalid handshake");
-        options.acceptHello(record(JSON.parse(remote.data)));
-        if (closed) throw new Error("Connection is closed");
+        try {
+          if (closed) throw new Error("Connection is closed");
+          await send(JSON.stringify(options.hello));
+          const remote = await receive();
+          if (typeof remote.data !== "string" || remote.data.length > 1024)
+            throw new Error("Invalid handshake");
+          options.acceptHello(record(JSON.parse(remote.data)));
+          if (closed) throw new Error("Connection is closed");
+        } catch (cause) {
+          slot.release(peerId);
+          throw cause;
+        }
       },
       onJoinError: (details) => {
         const incumbent = slot.owns(details.peerId);
