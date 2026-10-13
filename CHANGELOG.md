@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.0 — unreleased
+## 0.1.0
 
 - Add signed Hypercore session logs and approved Hyperswarm peers.
 - Add a local host with explicit device grants and supported session adapters.
