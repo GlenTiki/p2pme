@@ -9,11 +9,13 @@ import {
 import { useMemo, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { z } from "zod";
+import { isId } from "../src/protocol.js";
 import {
   parseSurface,
   validateSurfaceValues,
   type AgentSurface,
   type SurfaceAction,
+  type SurfaceValues,
 } from "../src/surface.js";
 import { surfaceCatalog } from "./catalog.js";
 import { PendingAction, surfaceComponents } from "./controls.js";
@@ -47,11 +49,19 @@ function useSurfaceActions({
         actions: {
           sendSessionAction: async (params, _setState, state) => {
             if (!current() || runtime.busy || !params) return;
+            let values: SurfaceValues;
+            try {
+              values = validateSurfaceValues(surface, state.form);
+            } catch {
+              setStatus(
+                "Check the form values and size. The form must fit in 8 KiB.",
+              );
+              return;
+            }
             runtime.busy = true;
             setPending(true);
             setStatus("Send action…");
             try {
-              const values = validateSurfaceValues(surface, state.form);
               await onAction({
                 sessionId,
                 surfaceId: surface.surfaceId,
@@ -126,7 +136,7 @@ export function createSurfaceMount(element: HTMLElement) {
       input: unknown,
       onAction: SurfaceActionHandler,
     ) {
-      z.uuid().parse(sessionId);
+      z.string().refine(isId).parse(sessionId);
       const surface = parseSurface(input);
       const result = surfaceCatalog.validate(surface.spec);
       if (!result.success)

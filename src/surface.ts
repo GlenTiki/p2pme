@@ -1,9 +1,10 @@
 import { z } from "zod";
+import { isId } from "./protocol.js";
 
 const safeKey = z
   .string()
   .regex(/^[a-zA-Z][a-zA-Z0-9_-]{0,63}$/)
-  .refine((key) => !["constructor", "prototype", "__proto__"].includes(key));
+  .refine((key) => !(key in Object.prototype) && key !== "prototype");
 const fieldPath = z
   .string()
   .refine(
@@ -100,7 +101,7 @@ const valuesSchema = z
   .record(safeKey, scalar)
   .refine((values) => Object.keys(values).length <= 32);
 export const surfaceSchema = z.strictObject({
-  surfaceId: z.uuid(),
+  surfaceId: z.string().refine(isId),
   revision: z.number().int().min(1).max(Number.MAX_SAFE_INTEGER),
   spec: z.strictObject({
     root: safeKey,
@@ -192,6 +193,8 @@ function checkControl(element: SurfaceElement, values: SurfaceValues) {
 function checkTree(spec: AgentSurface["spec"]) {
   const visited = new Set<string>();
   function visit(key: string, depth: number) {
+    if (!Object.hasOwn(spec.elements, key))
+      throw new Error("The surface references a missing element.");
     const element = spec.elements[key];
     if (!element || visited.has(key) || depth > 8)
       throw new Error(

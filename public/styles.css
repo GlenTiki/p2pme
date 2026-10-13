@@ -109,6 +109,94 @@
   min-height: 1.5em;
   margin-top: 14px;
 }
+.app-feedback {
+  min-height: 1.5em;
+  color: var(--green);
+  font-size: 0.8rem;
+  margin-bottom: 14px;
+  overflow-wrap: anywhere;
+}
+.host-identity {
+  margin-top: 20px;
+  font-family: monospace;
+  font-size: 0.7rem;
+  overflow-wrap: anywhere;
+}
+#pairing-panel {
+  margin-top: 23px;
+}
+#pairing-panel label {
+  margin-top: 20px;
+}
+#pairing-panel textarea {
+  font-size: 0.7rem;
+}
+#pairing-panel .text-button {
+  margin-block: 7px 0;
+}
+#host-list li {
+  margin-bottom: 14px;
+  overflow-wrap: anywhere;
+}
+#host-list li > span {
+  display: block;
+}
+#host-list .text-button {
+  margin: 4px 15px 0 0;
+}
+#session-list .text-button {
+  text-align: left;
+  margin-block: 7px;
+}
+.create-session-panel {
+  padding: 18px 26px;
+  border-bottom: 1px solid var(--line);
+  font-size: 0.8rem;
+}
+.create-session-panel summary {
+  cursor: pointer;
+}
+.create-session-panel form {
+  display: grid;
+  gap: 9px;
+  margin-top: 18px;
+}
+.create-session-panel select,
+.create-session-panel input {
+  font: inherit;
+  padding: 9px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--surface);
+}
+.create-session-panel .button {
+  justify-self: start;
+  margin-top: 8px;
+}
+.chat-message {
+  padding: 12px 0;
+}
+.chat-message strong {
+  font-size: 0.7rem;
+  color: var(--green);
+}
+.chat-message p {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 0.85rem;
+  margin-top: 4px;
+}
+.messages {
+  max-height: 600px;
+  overflow-y: auto;
+}
+.agent-controls {
+  padding-block: 20px;
+  border-top: 1px solid var(--line);
+}
+.agent-controls > h4 {
+  margin-bottom: 16px;
+}
 @media (max-width: 760px) {
   .demo-layout {
     grid-template-columns: 1fr;

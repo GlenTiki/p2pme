@@ -157,9 +157,19 @@
               <h2 id="pair-title">Pair your browser</h2>
               <ol class="instruction-list">
                 <li>Open <a href="/">p2pme.glentiki.dev</a> on your phone.</li>
-                <li>Enter your host ID and its one-use pairing code.</li>
-                <li>Approve the device on your local host.</li>
-                <li>Choose whether this browser should remember the host.</li>
+                <li>
+                  Name the browser and choose whether it should remember the
+                  host.
+                </li>
+                <li>
+                  Select Create invitation. Copy the agent prompt to your local
+                  session.
+                </li>
+                <li>
+                  Run <code>p2pme pair</code> in your own terminal. Paste the
+                  invitation when asked.
+                </li>
+                <li>Check the displayed scope. Approve the device locally.</li>
                 <li>Select a registered session to send a message.</li>
               </ol>
               <p>
@@ -184,9 +194,16 @@
               connections. The browser uses WebRTC to reach the local peer.
             </p>
             <p>
-              A direct browser connection can fail on restrictive networks. A
-              relay can help, but it can incur costs. The public connection
-              service and its cost model remain under development.
+              GitHub Pages serves the static app. Public Nostr relays at nos.lol
+              and relay.damus.io carry encrypted discovery offers. Google and
+              Cloudflare STUN servers help peers connect. These services can see
+              connection metadata.
+            </p>
+            <p>
+              The app contacts those services only after you select Connect or
+              Create invitation. It operates no hosted chat server. Direct
+              connections can fail on restrictive networks. An operator can
+              supply TURN; that relay can incur costs.
             </p>
             <a class="text-link" href="https://github.com/GlenTiki/p2pme"
               >Read the source and specifications

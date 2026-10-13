@@ -44,6 +44,16 @@ afterEach(async () => {
 });
 
 describe("agent surface controls", () => {
+  it("reports local form validation separately from a network error", async () => {
+    const onAction = vi.fn();
+    await act(async () => {
+      mount.mountSurface(sessionId, demoSurface, onAction);
+    });
+    await edit(input("text"), "界".repeat(3000));
+    await click(button());
+    expect(onAction).not.toHaveBeenCalled();
+    expect(container.textContent).toContain("Check the form values and size");
+  });
   it("changes local text and visibility without an action, then sends on click", async () => {
     const onAction = vi.fn();
     await act(async () => {

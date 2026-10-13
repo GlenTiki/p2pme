@@ -50,6 +50,32 @@ export function exampleSurface() {
 }
 
 describe("surface validation", () => {
+  it("rejects a surface ID that the host protocol cannot accept", () => {
+    const surface = exampleSurface();
+    surface.surfaceId = "019a8000-0000-7000-8000-000000000001";
+    expect(() => parseSurface(surface)).toThrow();
+  });
+  it.each([
+    "toString",
+    "valueOf",
+    "hasOwnProperty",
+    "isPrototypeOf",
+    "propertyIsEnumerable",
+    "toLocaleString",
+  ])("rejects prototype key %s at every reference", (key) => {
+    const root = exampleSurface();
+    root.spec.root = key;
+    expect(() => parseSurface(root)).toThrow();
+    const child = exampleSurface();
+    child.spec.elements.root.children.push(key);
+    expect(() => parseSurface(child)).toThrow();
+    const state = exampleSurface();
+    Object.assign(state.spec.state.form, { [key]: "bad" });
+    expect(() => parseSurface(state)).toThrow();
+    const bound = exampleSurface();
+    bound.spec.elements.input.props.value.$bindState = `/form/${key}`;
+    expect(() => parseSurface(bound)).toThrow();
+  });
   it("accepts an explicit form with local bindings and one click action", () => {
     expect(parseSurface(exampleSurface()).spec.state.form.task).toBe("Review");
   });
