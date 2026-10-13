@@ -10,4 +10,13 @@ export * from "./pairing.js";
 export * from "./host-client.js";
 export * from "./host-connection.js";
 export * from "./rtc-channel.js";
-export * from "./rtc-identity.js";
+export {
+  createInvitation,
+  encodeInvitation,
+  decodeInvitation,
+  randomSecret,
+  connectionRecord,
+  type RoomCredentials,
+  type PairingInvitation,
+  type ConnectionRecord,
+} from "./rtc-identity.js";
