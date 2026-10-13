@@ -1,0 +1,58 @@
+{
+  "name": "@glentiki/p2pme",
+  "version": "0.1.0",
+  "description": "Signed agent session logs and approved peer replication with Hypercore.",
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./node": {
+      "types": "./dist/node.d.ts",
+      "import": "./dist/node.js"
+    }
+  },
+  "files": [
+    "dist",
+    "skills",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "build:sdk": "tsc -p tsconfig.build.json && esbuild src/index.ts --bundle --platform=browser --format=esm --target=es2022 --outfile=dist/index.js && esbuild src/node.ts --bundle --platform=node --format=esm --target=node22 --packages=external --outfile=dist/node.js",
+    "build": "npm run build:sdk",
+    "check": "npm run typecheck && npm run lint && npm run format:check && npm test && npm run build",
+    "example:native": "npm run build:sdk && node examples/native-peers.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.32.1",
+    "hypercore": "11.38.0",
+    "hyperdht": "6.34.1",
+    "hyperswarm": "4.17.2",
+    "werift": "0.25.0",
+    "ws": "8.22.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "5.20261013.1",
+    "@eslint/js": "10.0.1",
+    "@types/node": "22.20.5",
+    "@types/ws": "8.18.2",
+    "esbuild": "0.28.2",
+    "eslint": "10.12.0",
+    "prettier": "3.9.10",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.71.2",
+    "vitest": "5.0.4",
+    "wrangler": "4.150.0"
+  }
+}
