@@ -87,14 +87,23 @@ p2pme claude-setup CLAUDE_SESSION_ID --output-dir /absolute/new-directory
 
 The command writes separate MCP and hook settings files. It prints a `claude --resume` command with those files and the development channel flag. Exit the selected Claude process first. Run the printed command from the host-approved workspace and accept the native channel and MCP prompts. Do not run two copies of the same session. The hook must confirm the expected session before the host exposes it. A received session-end or mismatch hook invalidates the registration. Create a new setup after a session switch. This command does not edit your existing settings or launch Claude. Native Channels remain experimental. If a lifecycle hook fails or times out, an old channel can persist until its socket closes. `p2pme start claude` creates a separate managed session with a fixed process identity.
 
-The package contains [the p2pme skill](skills/p2pme/SKILL.md). Copy its folder into the project where you want to use it:
+The package contains [the p2pme skill](skills/p2pme/SKILL.md). Copy its file into the project where you want to use it. For Codex:
 
 ```sh
-mkdir -p .agents/skills
-cp -R "$(npm root --global)/@glentiki/p2pme/skills/p2pme" .agents/skills/p2pme
+mkdir -p .agents/skills/p2pme
+cp "$(npm root --global)/@glentiki/p2pme/skills/p2pme/SKILL.md" .agents/skills/p2pme/SKILL.md
 ```
 
-Codex loads `.agents/skills/p2pme/SKILL.md`. Invoke `$p2pme` or select the skill in its skill menu. Claude Code loads `.claude/skills/p2pme/SKILL.md`; use the same copy command with `.claude/skills`, then invoke `/p2pme`. These paths follow the [Codex skill guide](https://learn.chatgpt.com/docs/build-skills) and [Claude Code skill guide](https://code.claude.com/docs/en/skills). The site also serves [plain agent instructions](https://p2pme.glentiki.dev/skill.md).
+For Claude Code:
+
+```sh
+mkdir -p .claude/skills/p2pme
+cp "$(npm root --global)/@glentiki/p2pme/skills/p2pme/SKILL.md" .claude/skills/p2pme/SKILL.md
+```
+
+These commands replace the skill file during an upgrade. They do not create a nested skill folder.
+
+Codex loads `.agents/skills/p2pme/SKILL.md`. Invoke `$p2pme` or select the skill in its skill menu. Claude Code loads `.claude/skills/p2pme/SKILL.md`; invoke `/p2pme`. These paths follow the [Codex skill guide](https://learn.chatgpt.com/docs/build-skills) and [Claude Code skill guide](https://code.claude.com/docs/en/skills). The site also serves [plain agent instructions](https://p2pme.glentiki.dev/skill.md).
 
 ## Create, delegate and submit controls
 
