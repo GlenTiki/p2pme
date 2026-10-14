@@ -13,7 +13,7 @@ const run = promisify(execFile);
 async function browserConsumer(directory: string) {
   const bundle = await build({
     stdin: {
-      contents: `import {beginPairing,connectHost,createInvitation} from '@glentiki/p2pme/browser'; window.packageReady = typeof beginPairing === 'function' && typeof connectHost === 'function' && createInvitation('Consumer').version === 1;`,
+      contents: `import {beginPairing,connectHost,createInvitation,joinHostPairing,decodeHostInvitation,createHostInvitationUrl} from '@glentiki/p2pme/browser'; const url = new URL(createHostInvitationUrl(createInvitation('Consumer'))); window.packageReady = [beginPairing,connectHost,joinHostPairing,decodeHostInvitation].every(fn=>typeof fn==='function') && url.protocol === 'https:' && url.hash.startsWith('#pair=');`,
       resolveDir: directory,
     },
     bundle: true,
@@ -22,6 +22,10 @@ async function browserConsumer(directory: string) {
     format: "esm",
   });
   const server = createServer((request, response) => {
+    response.setHeader(
+      "Content-Security-Policy",
+      "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'none'; object-src 'none'; base-uri 'none'",
+    );
     response.setHeader(
       "Content-Type",
       request.url === "/app.js" ? "application/javascript" : "text/html",
@@ -124,18 +128,24 @@ it("installs a complete tarball and runs its public imports, declarations and CL
       options,
     );
     expect(result.stdout).toContain("p2pme host --workspace");
+    expect(result.stdout).toContain("p2pme invite --profiles");
+    expect(result.stdout).toContain("p2pme cancel-invite");
     const consumer = `
       import {createEnvelope} from '@glentiki/p2pme';
-      import {createSessionLog,createHost,attachCodex} from '@glentiki/p2pme/node';
-      import {beginPairing,connectHost} from '@glentiki/p2pme/browser';
+      import {createSessionLog,createHost,attachCodex,offerHostPairing} from '@glentiki/p2pme/node';
+      import {beginPairing,connectHost,joinHostPairing} from '@glentiki/p2pme/browser';
       const log = await createSessionLog({sessionId:crypto.randomUUID()});
       try { await log.append(createEnvelope(log.sessionId,'chat.send',{text:'Installed consumer'}));
       if ((await log.get(0))?.type !== 'chat.send') throw Error('Missing installed log');
-      if ([createHost,attachCodex,beginPairing,connectHost].some(fn=>typeof fn!=='function')) throw Error('Missing export');
+      if ([createHost,attachCodex,beginPairing,connectHost,offerHostPairing,joinHostPairing].some(fn=>typeof fn!=='function')) throw Error('Missing export');
       } finally { await log.close(); }`;
     await writeFile(join(directory, "consumer.mjs"), consumer);
     await run(process.execPath, ["consumer.mjs"], options);
-    await writeFile(join(directory, "consumer.ts"), consumer);
+    await writeFile(
+      join(directory, "consumer.ts"),
+      consumer +
+        "\nimport type {ChannelFactory,ChannelOptions} from '@glentiki/p2pme/browser';\n",
+    );
     await run(
       process.execPath,
       [

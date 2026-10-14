@@ -1,7 +1,6 @@
 import type { ClientOptions, HostClient } from "../src/host-client.js";
-import type { PairingAttempt } from "../src/pairing.js";
 import {
-  encodeInvitation,
+  type PairingInvitation,
   type ConnectionRecord,
 } from "../src/rtc-identity.js";
 import type { ProfileInfo, SessionInfo } from "../src/host-protocol.js";
@@ -9,6 +8,7 @@ import type { SurfaceAction } from "../src/surface.js";
 import { createSurfaceMount } from "./surface.js";
 import { createSurfaceDelivery } from "./surface-delivery.js";
 import type { Envelope } from "../src/protocol.js";
+import type { PairingLink } from "./pairing-link.js";
 import {
   actionButton,
   createConversation,
@@ -24,8 +24,12 @@ import {
   type HostStorage,
 } from "./saved-hosts.js";
 
+interface JoinAttempt {
+  completion: Promise<ConnectionRecord>;
+  close(): Promise<void>;
+}
 export interface BrowserDependencies {
-  pair(label: string): PairingAttempt;
+  join(input: string | PairingInvitation, label: string): JoinAttempt;
   connect(
     record: ConnectionRecord,
     options: ClientOptions,
@@ -36,7 +40,8 @@ export interface BrowserDependencies {
 
 class BrowserApp {
   private client: HostClient | null = null;
-  private attempt: PairingAttempt | null = null;
+  private attempt: JoinAttempt | null = null;
+  private saveCandidate: ConnectionRecord | null = null;
   private selected: SessionInfo | null = null;
   private generation = 0;
   private busy = false;
@@ -48,10 +53,12 @@ class BrowserApp {
   private readonly surface;
   private readonly delivery;
   private refreshSequence = 0;
+  private refreshing = false;
   private readonly conversation;
   constructor(
     private readonly root: ParentNode,
     private readonly deps: BrowserDependencies,
+    link: PairingLink,
   ) {
     this.surface = createSurfaceMount(this.element("session-surface"));
     this.delivery = createSurfaceDelivery({
@@ -70,10 +77,25 @@ class BrowserApp {
       this.feedback("");
       this.renderHosts();
     });
-    this.bind("copy-invitation", "click", () => this.copy("pairing-code"));
     this.bind("copy-agent-prompt", "click", () => this.copy("agent-prompt"));
+    this.bind("remember-connected-host", "click", () => {
+      if (this.client && this.saveCandidate) this.remember(this.saveCandidate);
+    });
     this.renderHosts();
     this.controls();
+    this.openPairingLink(link);
+  }
+  openPairingLink(link: PairingLink) {
+    if (link.kind === "none") return;
+    if (this.busy || this.client) {
+      this.feedback("Disconnect, then open the connection link again.");
+      return;
+    }
+    if (link.kind === "invalid")
+      this.feedback(
+        "LINK_INVALID: This connection link is invalid. Request a new link from your agent.",
+      );
+    if (link.kind === "invitation") void this.pair(link.invitation);
   }
   private element<T extends HTMLElement>(id: string) {
     return getElement<T>(this.root, id);
@@ -90,12 +112,8 @@ class BrowserApp {
   private async run(action: () => void | Promise<void>) {
     try {
       await action();
-    } catch (error) {
-      this.feedback(
-        error instanceof Error
-          ? error.message.slice(0, 500)
-          : "The action failed.",
-      );
+    } catch {
+      this.feedback("The action failed. Check the host and try again.");
     }
   }
   private feedback(text: string) {
@@ -105,12 +123,21 @@ class BrowserApp {
     this.element("connection-status-text").textContent = text;
   }
   private controls() {
+    this.element("remember-connected-host").hidden =
+      this.client === null || this.saveCandidate === null;
     const ready =
       this.client !== null && this.selected !== null && this.selected.online;
     this.element<HTMLButtonElement>("connect-host").disabled =
       this.busy || this.client !== null;
     this.element<HTMLButtonElement>("disconnect-host").disabled =
       !this.busy && this.client === null;
+    this.sessionControls();
+    this.element<HTMLButtonElement>("send-message").disabled =
+      !ready || this.sending;
+    this.element<HTMLTextAreaElement>("message-input").disabled = !ready;
+    this.element<HTMLInputElement>("delegate-task").disabled = !ready;
+  }
+  private sessionControls() {
     const canCreate = this.client !== null && this.profiles.length > 0;
     this.element("create-session-panel").hidden = !canCreate;
     this.element("session-context-status").hidden =
@@ -122,11 +149,7 @@ class BrowserApp {
       creationDisabled;
     this.element<HTMLInputElement>("session-label").disabled = creationDisabled;
     this.element<HTMLButtonElement>("refresh-sessions").disabled =
-      this.client === null;
-    this.element<HTMLButtonElement>("send-message").disabled =
-      !ready || this.sending;
-    this.element<HTMLTextAreaElement>("message-input").disabled = !ready;
-    this.element<HTMLInputElement>("delegate-task").disabled = !ready;
+      this.client === null || this.refreshing;
   }
   private renderHosts() {
     const list = this.element("host-list");
@@ -161,7 +184,7 @@ class BrowserApp {
     if (!list.children.length) {
       const item = document.createElement("li");
       item.textContent =
-        "No saved hosts. Create an invitation to pair this browser.";
+        "No saved hosts. Enter a code or open your agent’s QR link.";
       list.append(item);
     }
   }
@@ -169,37 +192,45 @@ class BrowserApp {
     const host = loadHosts(this.deps.storage).find(
       (record) => record.hostId === hostId,
     );
-    if (!host)
-      throw new Error("This host was forgotten. Pair again to connect.");
+    if (!host) {
+      this.feedback("This host was forgotten. Pair again to connect.");
+      return;
+    }
     await this.connect(host, false);
   }
-  private async pair() {
+  private async pair(invitation?: PairingInvitation) {
     if (this.busy || this.client) return;
     this.feedback("");
     const generation = ++this.generation;
-    const attempt = this.deps.pair(
-      this.element<HTMLInputElement>("device-label").value,
-    );
-    this.attempt = attempt;
     this.busy = true;
     this.controls();
-    const invitation = encodeInvitation(attempt.invitation);
-    this.element<HTMLTextAreaElement>("pairing-code").value = invitation;
-    this.element<HTMLTextAreaElement>("agent-prompt").value =
-      `Read https://p2pme.glentiki.dev/host and set up /p2pme for this session. Then help me pair this browser using: ${invitation}`;
-    this.element("pairing-panel").hidden = false;
-    this.status("Waiting for local approval");
+    let attempt: JoinAttempt | undefined;
+    let paired = false;
     try {
+      const input =
+        invitation ?? this.element<HTMLInputElement>("pairing-code").value;
+      attempt = this.deps.join(
+        input,
+        this.element<HTMLInputElement>("device-label").value,
+      );
+      this.attempt = attempt;
+      this.element<HTMLInputElement>("pairing-code").value = "";
+      this.status("Pairing with host");
       const record = await attempt.completion;
+      paired = true;
       if (generation !== this.generation) return;
       await this.establish(record, true, generation);
-    } catch (error) {
+    } catch {
       if (generation === this.generation) {
         await this.disconnect();
-        throw error;
+        this.feedback(
+          paired
+            ? "HOST_UNREACHABLE: The device was paired, but the host connection failed. Keep the host online, then reconnect or ask for a new invitation."
+            : "PAIRING_FAILED: Pairing did not complete. Keep the host online. Try the QR link or ask your agent for a new invitation.",
+        );
       }
     } finally {
-      await attempt.close();
+      await attempt?.close();
       if (this.attempt === attempt) this.attempt = null;
     }
   }
@@ -211,10 +242,12 @@ class BrowserApp {
     const generation = ++this.generation;
     try {
       await this.establish(record, remember, generation);
-    } catch (error) {
+    } catch {
       if (generation === this.generation) {
         await this.disconnect();
-        throw error;
+        this.feedback(
+          "HOST_UNREACHABLE: The device was paired, but the host connection failed. Keep the host online, then reconnect or ask for a new invitation.",
+        );
       }
     }
   }
@@ -229,10 +262,12 @@ class BrowserApp {
     const client = await this.deps.connect(record, {
       signal: abort.signal,
       onEvent: (event) => this.receive(event, generation),
-      onDisconnect: (error) => {
-        if (generation === this.generation) {
+      onDisconnect: () => {
+        if (generation === this.generation && this.client) {
           this.reset();
-          this.feedback(error.message);
+          this.feedback(
+            "HOST_UNREACHABLE: The device was paired, but the host connection failed. Keep the host online, then reconnect or ask for a new invitation.",
+          );
         }
       },
     });
@@ -241,11 +276,12 @@ class BrowserApp {
       return;
     }
     this.client = client;
+    this.saveCandidate = remember ? record : null;
     this.busy = false;
-    this.element("pairing-panel").hidden = true;
     this.element("host-id").textContent = `Host ID: ${client.hostId}`;
     this.element("host-label").textContent = record.label;
     this.status("Connected to host");
+    this.element<HTMLDetailsElement>("host-setup").open = false;
     this.controls();
     if (remember && this.element<HTMLInputElement>("remember-host").checked)
       this.remember(record);
@@ -254,7 +290,10 @@ class BrowserApp {
   private remember(record: ConnectionRecord) {
     try {
       saveHost(this.deps.storage, record);
+      this.saveCandidate = null;
       this.renderHosts();
+      this.controls();
+      this.feedback("Host remembered in this browser.");
     } catch {
       this.feedback(
         "Connected, but this browser could not save the host. Keep this tab open or pair again later.",
@@ -264,24 +303,41 @@ class BrowserApp {
   private async refreshSessions(client: HostClient, generation: number) {
     if (generation !== this.generation) return;
     const sequence = ++this.refreshSequence;
+    this.refreshing = true;
+    if (
+      this.element("app-feedback").textContent?.startsWith(
+        "SESSIONS_UNAVAILABLE:",
+      )
+    )
+      this.feedback("");
+    this.controls();
+    try {
+      await this.loadSessions(client, generation, sequence);
+    } catch {
+      if (generation === this.generation && sequence === this.refreshSequence) {
+        this.setProfiles([]);
+        this.feedback(
+          "SESSIONS_UNAVAILABLE: Connected to the host, but sessions could not load. Select Refresh to try again.",
+        );
+      }
+    } finally {
+      if (generation === this.generation && sequence === this.refreshSequence) {
+        this.refreshing = false;
+        this.controls();
+      }
+    }
+  }
+  private async loadSessions(
+    client: HostClient,
+    generation: number,
+    sequence: number,
+  ) {
     const profileId = this.element<HTMLSelectElement>("session-profile").value;
     this.setProfiles([]);
     this.element("session-context-status").textContent =
       "Loading session contexts…";
-    const sessions = await client
-      .request("sessions.list", {})
-      .then(sessionList)
-      .catch((error: unknown) => {
-        if (generation !== this.generation || sequence !== this.refreshSequence)
-          return null;
-        this.setProfiles([]);
-        throw error;
-      });
-    if (
-      !sessions ||
-      generation !== this.generation ||
-      sequence !== this.refreshSequence
-    )
+    const sessions = sessionList(await client.request("sessions.list", {}));
+    if (generation !== this.generation || sequence !== this.refreshSequence)
       return;
     const list = this.element("session-list");
     list.replaceChildren();
@@ -298,7 +354,7 @@ class BrowserApp {
     if (!sessions.length) {
       const item = document.createElement("li");
       item.textContent =
-        "No registered sessions. Run /p2pme in a supported local agent session.";
+        "No registered sessions. Use the p2pme skill in your local agent.";
       list.append(item);
     }
     if (this.selected) this.updateSelected(sessions);
@@ -441,8 +497,11 @@ class BrowserApp {
       await this.refreshSessions(client, generation);
       if (generation === this.generation)
         this.feedback("Session created. Select it from the list.");
-    } catch (error) {
-      if (generation === this.generation) throw error;
+    } catch {
+      if (generation === this.generation)
+        this.feedback(
+          "Session creation failed. Check sessions:create access on the host.",
+        );
     } finally {
       if (generation === this.generation) {
         this.creating = false;
@@ -453,7 +512,7 @@ class BrowserApp {
   private async copy(id: string) {
     try {
       await this.deps.copy(this.element<HTMLTextAreaElement>(id).value);
-      this.feedback("Copied. Keep the invitation private.");
+      this.feedback("Agent instruction copied.");
     } catch {
       this.feedback("Copy failed. Select the text and copy it manually.");
     }
@@ -483,18 +542,19 @@ class BrowserApp {
     this.connectionAbort = null;
     abort?.abort();
     this.client = null;
+    this.saveCandidate = null;
     this.selected = null;
     this.busy = false;
     this.sending = false;
     this.creating = false;
+    this.refreshing = false;
+    this.element<HTMLDetailsElement>("host-setup").open = true;
     this.setProfiles([]);
     this.element<HTMLInputElement>("session-label").value = "";
     this.element<HTMLDetailsElement>("create-session-panel").open = false;
     this.element<HTMLInputElement>("delegate-task").checked = false;
     this.delivery.select(null);
-    this.element("pairing-panel").hidden = true;
-    this.element<HTMLTextAreaElement>("pairing-code").value = "";
-    this.element<HTMLTextAreaElement>("agent-prompt").value = "";
+    this.element<HTMLInputElement>("pairing-code").value = "";
     this.element("host-id").textContent = "";
     this.element("host-label").textContent = "No host selected";
     this.element("selected-session").textContent = "No session selected";
@@ -518,6 +578,10 @@ class BrowserApp {
   }
 }
 
-export function createBrowserApp(root: ParentNode, deps: BrowserDependencies) {
-  return new BrowserApp(root, deps);
+export function createBrowserApp(
+  root: ParentNode,
+  deps: BrowserDependencies,
+  link: PairingLink = { kind: "none" },
+) {
+  return new BrowserApp(root, deps, link);
 }

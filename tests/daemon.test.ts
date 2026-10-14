@@ -351,3 +351,53 @@ describe("private local daemon", () => {
     ).rejects.toThrow();
   });
 });
+
+it("owns invitations after their control socket closes and cancels them through a new socket", async () => {
+  const f = await fixture();
+  let closed = false;
+  let rejected!: (error: Error) => void;
+  const completion = new Promise<
+    import("../src/rtc-identity.js").ConnectionRecord
+  >((_resolve, reject) => {
+    rejected = reject;
+  });
+  void completion.catch(() => {});
+  f.transport.offer = async () => {
+    const invitation = createInvitation("Host");
+    return {
+      invitation,
+      code: "7K3M2Q-9RX4TW6P",
+      url: "https://p2pme.glentiki.dev/#pair=private",
+      completion,
+      state: "pending",
+      cancel: async () => {
+        closed = true;
+        rejected(new Error("cancelled"));
+        return "cancelled";
+      },
+      close: async () => {
+        closed = true;
+        rejected(new Error("closed"));
+      },
+    };
+  };
+  const response = await f.request("invite", {
+    principal: "human-device",
+    scopes: ["sessions:list", "sessions:chat"],
+    profileIds: ["fake"],
+  });
+  expect(response.result.code).toBe("7K3M2Q-9RX4TW6P");
+  expect(closed).toBe(false);
+  const status = await f.request("status");
+  expect(status.result.invitation).toMatchObject({
+    attemptId: response.result.attemptId,
+  });
+  expect(JSON.stringify(status)).not.toMatch(/7K3M2Q|#pair|roomSecret/);
+  await expect(f.pair()).rejects.toThrow();
+  const cancelled = await f.request("cancel-invite", {
+    attemptId: response.result.attemptId,
+  });
+  expect(cancelled.result.status).toBe("cancelled");
+  expect(closed).toBe(true);
+  expect(f.order).not.toContain("confirm");
+});

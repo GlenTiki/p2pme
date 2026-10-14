@@ -3,6 +3,9 @@ import { lstat } from "node:fs/promises";
 import { dirname } from "node:path";
 import { MAX_FRAME_BYTES, isId } from "./protocol.js";
 
+export const HOST_UNAVAILABLE_MESSAGE =
+  "Local host is not running. Start p2pme host --workspace PATH and keep it running. Use the same --state-dir on every command.";
+
 export interface ControlRequest {
   id: string;
   op: string;
@@ -30,16 +33,7 @@ export async function controlRequest(
   request: ControlRequest,
   timeoutMs = 60000,
 ): Promise<ControlResponse> {
-  await assertPrivateDirectory(dirname(socketPath));
-  const info = await lstat(socketPath);
-  if (
-    !info.isSocket() ||
-    info.uid !== process.getuid?.() ||
-    (info.mode & 0o077) !== 0
-  )
-    throw new Error(
-      "Control socket must be private and owned by the current user",
-    );
+  await inspectControlSocket(socketPath);
   const frame = JSON.stringify(request) + "\n";
   if (Buffer.byteLength(frame) > MAX_FRAME_BYTES)
     throw new Error("Control request exceeds limit");
@@ -57,8 +51,14 @@ export async function controlRequest(
       else resolve(response!);
     };
     socket.once("connect", () => socket.write(frame));
-    socket.once("error", () =>
-      finish(new Error("Local host connection failed")),
+    socket.once("error", (error: NodeJS.ErrnoException) =>
+      finish(
+        new Error(
+          error.code === "ECONNREFUSED" || error.code === "ENOENT"
+            ? HOST_UNAVAILABLE_MESSAGE
+            : "Local host connection failed",
+        ),
+      ),
     );
     socket.once("close", () => finish(new Error("Local host disconnected")));
     socket.on("data", (chunk: Buffer) => {
@@ -73,6 +73,24 @@ export async function controlRequest(
       }
     });
   });
+}
+async function inspectControlSocket(socketPath: string): Promise<void> {
+  try {
+    await assertPrivateDirectory(dirname(socketPath));
+    const info = await lstat(socketPath);
+    if (
+      !info.isSocket() ||
+      info.uid !== process.getuid?.() ||
+      (info.mode & 0o077) !== 0
+    )
+      throw new Error(
+        "Control socket must be private and owned by the current user",
+      );
+  } catch (error) {
+    if (error instanceof Error && "code" in error && error.code === "ENOENT")
+      throw new Error(HOST_UNAVAILABLE_MESSAGE, { cause: error });
+    throw error;
+  }
 }
 function parseResponse(frame: string, requestId: string): ControlResponse {
   const value = JSON.parse(frame) as Record<string, unknown>;

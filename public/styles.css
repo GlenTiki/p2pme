@@ -122,16 +122,10 @@
   font-size: 0.7rem;
   overflow-wrap: anywhere;
 }
-#pairing-panel {
-  margin-top: 23px;
-}
-#pairing-panel label {
-  margin-top: 20px;
-}
-#pairing-panel textarea {
+.agent-setup textarea {
   font-size: 0.7rem;
 }
-#pairing-panel .text-button {
+.agent-setup .text-button {
   margin-block: 7px 0;
 }
 #host-list li {
@@ -1198,4 +1192,51 @@ input[type="checkbox"] {
   html {
     scroll-behavior: auto;
   }
+}
+
+.agent-setup {
+  margin-bottom: 24px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--line);
+}
+
+.live-main {
+  padding-top: 28px;
+}
+.live-main .app-section {
+  padding-bottom: 24px;
+}
+.live-main h1 {
+  font-size: clamp(1.8rem, 4vw, 2.8rem);
+  margin-block: 10px 0;
+}
+.live-main .workspace {
+  grid-template-columns: minmax(0, 1fr);
+}
+.live-main .host-panel {
+  border-right: 0;
+  border-bottom: 1px solid var(--line);
+}
+.host-setup {
+  margin-top: 18px;
+}
+.host-setup > summary {
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+.host-setup[open] > summary {
+  margin-bottom: 18px;
+}
+.live-main .host-identity {
+  overflow-wrap: anywhere;
+}
+.live-main .messages {
+  min-height: 240px;
+}
+.live-main .panel-heading {
+  flex-wrap: wrap;
+}
+.live-main #selected-session {
+  overflow-wrap: anywhere;
 }

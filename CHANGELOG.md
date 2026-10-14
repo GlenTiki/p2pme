@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.2.0
+
+- Create a local invitation with a code, connection link, and private QR image.
+- Open session controls directly at `/live/`.
+- Distinguish failed pairing, host connection, and session-list retrieval.
+- Explain when the local host is not running.
+- Use WebSocket frames when attaching to an existing Codex session through its local proxy.
+- Limit session-list requests to 30 seconds so the browser can retry a stalled request.
+- Authorize one browser through that invitation, with the access selected locally.
+- Authenticate typed codes with OPAQUE before a private grant exchange.
+- Keep the QR path available if the public code path fails.
+- Save a verified host from the browser after a QR connection.
+- Preserve the legacy pairing API and its separate terminal approval.
+
 ## 0.1.1
 
 - Hide session creation until the connected host supplies approved contexts.

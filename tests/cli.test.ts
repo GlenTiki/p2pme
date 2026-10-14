@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { PassThrough, Readable, Writable } from "node:stream";
 import { tmpdir } from "node:os";
+import { mkdtemp, lstat, rm } from "node:fs/promises";
+import { join } from "node:path";
 import { runCli } from "../src/cli-main.js";
 import { cliErrorMessage } from "../src/cli-error.js";
 import {
@@ -227,4 +229,209 @@ describe("safe CLI startup errors", () => {
       "p2pme command failed. Check the command and host terminal; run p2pme --help.",
     );
   });
+});
+
+describe("host-first invitation CLI", () => {
+  it("reserves the image before requesting an invitation and keeps the path local", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "p2pme-cli-qr-"));
+    const path = join(directory, "phone.png");
+    const f = fixture();
+    try {
+      await runCli(["invite", "--profiles", "codex", "--qr-file", path], {
+        ...f.options,
+        request: async (_socket, request) => {
+          expect((await lstat(path)).size).toBe(0);
+          expect(request.args).not.toHaveProperty("qrFile");
+          expect(JSON.stringify(request)).not.toContain(path);
+          return {
+            id: request.id,
+            ok: true,
+            result: {
+              code: "7K3M2Q-9RX4TW6P",
+              url: "https://p2pme.glentiki.dev/live/#pair=synthetic",
+            },
+          };
+        },
+      });
+      expect((await lstat(path)).size).toBeGreaterThan(0);
+      expect(f.output()).toContain("7K3M2Q-9RX4TW6P");
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+  it("removes the reserved image when the host rejects the request", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "p2pme-cli-qr-"));
+    const path = join(directory, "phone.png");
+    try {
+      await expect(
+        runCli(["invite", "--profiles", "codex", "--qr-file", path], {
+          ...fixture().options,
+          request: async () => {
+            throw new Error("host unavailable");
+          },
+        }),
+      ).rejects.toThrow("host unavailable");
+      await expect(lstat(path)).rejects.toMatchObject({ code: "ENOENT" });
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+  it("prints the recovery link and code before image failure without another request", async () => {
+    const f = fixture();
+    let closed = false;
+    let requests = 0;
+    const result = {
+      code: "7K3M2Q-9RX4TW6P",
+      url: "https://p2pme.glentiki.dev/live/#pair=synthetic",
+    };
+    await expect(
+      runCli(
+        [
+          "invite",
+          "--profiles",
+          "codex",
+          "--qr-file",
+          "/private/tmp/synthetic.png",
+        ],
+        {
+          ...f.options,
+          qrFile: async () => ({
+            write: async () => {
+              expect(f.output()).toContain(result.url);
+              expect(f.output()).toContain(result.code);
+              throw new Error("synthetic disk error");
+            },
+            close: async () => {
+              closed = true;
+            },
+          }),
+          request: async (_socket, request) => {
+            requests++;
+            return { id: request.id, ok: true, result };
+          },
+        },
+      ),
+    ).rejects.toThrow(
+      "QR image could not be written. Use the printed code or connection link.",
+    );
+    expect(requests).toBe(1);
+    expect(closed).toBe(true);
+  });
+  it.each([
+    ["invite", "--profiles", "codex", "--qr-file", "relative.png"],
+    ["invite", "--profiles", "codex", "--qr-file"],
+    [
+      "invite",
+      "--profiles",
+      "codex",
+      "--qr-file",
+      "/tmp/a",
+      "--qr-file",
+      "/tmp/b",
+    ],
+    ["pair", "--profiles", "codex", "--qr-file", "/tmp/a"],
+    ["invite", "--qr-file", "/tmp/a"],
+  ])(
+    "does not mint an invitation for invalid QR arguments %j",
+    async (...args) => {
+      const f = fixture();
+      await expect(runCli(args, f.options)).rejects.toThrow();
+      expect(f.requests).toEqual([]);
+    },
+  );
+  it("requests the default access without stdin or a terminal prompt and renders a local QR", async () => {
+    const f = fixture();
+    const result = {
+      attemptId: crypto.randomUUID(),
+      expiresAt: "2026-10-14T12:10:00Z",
+      code: "7K3M2Q-9RX4TW6P",
+      url: "https://p2pme.glentiki.dev/#pair=example",
+      access: {
+        principal: "human-device",
+        scopes: ["sessions:list", "sessions:chat"],
+        profileIds: ["codex"],
+        workspace: "/workspace",
+        sessionAccess: "registered",
+      },
+    };
+    await runCli(["invite", "--profiles", "codex"], {
+      ...f.options,
+      input: new Readable({
+        read() {
+          this.destroy(new Error("Must not read stdin"));
+        },
+      }),
+      request: async (_socket, request) => {
+        f.requests.push(request);
+        return { id: request.id, ok: true, result };
+      },
+    });
+    expect(f.requests[0]).toMatchObject({
+      op: "invite",
+      args: {
+        principal: "human-device",
+        scopes: ["sessions:list", "sessions:chat"],
+        profileIds: ["codex"],
+      },
+    });
+    expect(f.output()).toContain(result.code);
+    expect(f.output()).toContain(result.url);
+    expect(f.output()).toContain(result.expiresAt);
+    expect(f.output()).toContain("current and future registered sessions");
+    expect(f.output()).toContain(
+      "existing tools and return local file content",
+    );
+    expect(f.output()).toMatch(/[\u2580-\u259f]/u);
+    expect(f.output()).not.toContain("\\u001b");
+  });
+  it("cancels the exact invitation and preserves explicit agent access", async () => {
+    const f = fixture();
+    const attemptId = crypto.randomUUID();
+    await runCli(["cancel-invite", attemptId], f.options);
+    expect(f.requests[0]).toMatchObject({
+      op: "cancel-invite",
+      args: { attemptId },
+    });
+    await runCli(
+      [
+        "invite",
+        "--profiles",
+        "codex,claude",
+        "--agent",
+        "--scopes",
+        "sessions:list,tasks:delegate",
+      ],
+      {
+        ...f.options,
+        request: async (_socket, request) => {
+          f.requests.push(request);
+          return {
+            id: request.id,
+            ok: true,
+            result: { url: "https://p2pme.glentiki.dev/#pair=example" },
+          };
+        },
+      },
+    );
+    expect(f.requests[1]).toMatchObject({
+      op: "invite",
+      args: {
+        principal: "agent",
+        scopes: ["sessions:list", "tasks:delegate"],
+        profileIds: ["codex", "claude"],
+      },
+    });
+  });
+  it.each([
+    { args: ["invite"] },
+    { args: ["invite", "--profiles", "codex", "--yes"] },
+    { args: ["cancel-invite"] },
+  ])(
+    "rejects incomplete or unrecognized invitation arguments %j",
+    async ({ args }) => {
+      const f = fixture();
+      await expect(runCli(args, f.options)).rejects.toThrow();
+      expect(f.requests).toEqual([]);
+    },
+  );
 });

@@ -1,4 +1,9 @@
+import { HOST_UNAVAILABLE_MESSAGE } from "./local-client.js";
+
 const startupMessages = new Set([
+  HOST_UNAVAILABLE_MESSAGE,
+  "Invalid QR image path. Use a new file in an existing private directory with an absolute path.",
+  "QR image could not be written. Use the printed code or connection link.",
   "Host workspace identity changed; use a separate state directory",
   "Missing workspace policy; use a separate state directory",
   "Invalid daemon policy file",

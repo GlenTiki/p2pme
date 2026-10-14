@@ -16,3 +16,14 @@ export {
   type RtcChannel,
   type RtcNetwork,
 } from "./rtc-channel.js";
+
+export * from "./host-pairing.js";
+export {
+  decodeHostInvitation,
+  createHostInvitationUrl,
+  validateLabel,
+} from "./rtc-identity.js";
+export type { PairingInvitation, RoomCredentials } from "./rtc-identity.js";
+
+export type { ChannelFactory } from "./pairing.js";
+export type { ChannelOptions } from "./rtc-channel.js";

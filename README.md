@@ -6,7 +6,7 @@ A Hypercore library for local agent sessions. A browser app for people.
 
 p2pme connects approved native peers through signed message logs. Its local host exposes selected agent sessions to an approved browser. Agents can supply bounded reactive controls. People can send messages, submit those controls and delegate tasks within the host's grant.
 
-[Open the app](https://p2pme.glentiki.dev) · [Set up a host](https://p2pme.glentiki.dev/host/) · [Meet Glen Keane](https://glentiki.dev)
+[Open live sessions](https://p2pme.glentiki.dev/live/) · [Set up a host](https://p2pme.glentiki.dev/host/) · [Meet Glen Keane](https://glentiki.dev)
 
 This is an early personal project by Glen Keane. Glen builds developer tools and agent integrations. The chat app demonstrates the library. The library also supports agent-to-agent workflows.
 
@@ -14,11 +14,13 @@ This is an early personal project by Glen Keane. Glen builds developer tools and
 
 Use Node.js 22 or later. The local host supports macOS and Linux. Install and authenticate the provider CLI you intend to use.
 
-Install the package from a GitHub release tarball. Run this command after `v0.1.1` appears in [GitHub releases](https://github.com/GlenTiki/p2pme/releases):
+Install the package from a GitHub release tarball. Run this command after `v0.2.0` appears in [GitHub releases](https://github.com/GlenTiki/p2pme/releases):
 
 ```sh
-npm install --global https://github.com/GlenTiki/p2pme/releases/download/v0.1.1/glentiki-p2pme-0.1.1.tgz
+npm install --global https://github.com/GlenTiki/p2pme/releases/download/v0.2.0/glentiki-p2pme-0.2.0.tgz
 ```
+
+After an upgrade, restart the local host and register the selected sessions again. Existing device grants remain in the host state.
 
 For a library dependency, omit `--global`. The package name is `@glentiki/p2pme`. This project does not require an npm registry login.
 
@@ -35,26 +37,31 @@ npm link
 
 ## Connect a phone
 
-1. Start a host in a terminal: `p2pme host --workspace /absolute/path/to/project`.
-2. Keep that terminal open.
-3. In another terminal, create a managed session with `p2pme start codex` or `p2pme start claude`.
-4. Run `p2pme status` to see the host ID and registered session IDs.
-5. Open [p2pme.glentiki.dev](https://p2pme.glentiki.dev) on your phone.
-6. Enter a device label and select **Create invitation**.
-7. Run `p2pme pair --profiles codex` in your local terminal.
-8. Paste the invitation through stdin and end input with Ctrl-D.
-9. Return to the foreground host terminal, read the grant summary and type `approve`.
-10. Select the registered session in the browser.
+1. Give your local agent this instruction: “Read https://p2pme.glentiki.dev/host/ and use p2pme to connect this session to my phone.”
+2. The agent prepares the host, registers the selected session, and returns a code, link, and QR image.
+3. Scan the displayed image, open its connection link, or enter the code at [p2pme.glentiki.dev/live](https://p2pme.glentiki.dev/live/).
+4. Select a session from the connected host.
 
-Select the profiles you intend to expose. Use `--profiles claude` for Claude or `--profiles codex,claude` for both. A profile list is required.
+For manual setup, start `p2pme host --workspace /absolute/path/to/project`. Register an existing supported session or create one with `p2pme start codex` or `p2pme start claude`. Run `p2pme status` to confirm that the selected session is online. Run `p2pme invite --profiles codex` in another terminal. Use `--profiles claude` for Claude or `--profiles codex,claude` for both. Keep the host process alive.
 
-The browser offers session creation only after the connected host supplies approved contexts. This requires host version 0.1.1 or later and the `sessions:create` grant. The same grant permits context discovery. Older hosts still support session lists and chat.
+For a QR image that an agent can display, create a private temporary directory and a new file:
 
-The default grant permits session lists and chat. It expires after 30 days. It covers sessions registered on that host, including sessions registered later. The local approval screen shows the exact access. An agent must not answer that prompt for you.
+```sh
+qr_dir="$(mktemp -d)"
+p2pme invite --profiles codex --qr-file "$qr_dir/phone.png"
+```
 
-Select **Remember host** before the connection completes to store this device's access in the browser. Later visits require an explicit **Connect**. **Forget** removes the browser copy. Run `p2pme revoke GRANT_ID` to revoke access at the host. `p2pme status` lists grant IDs without secrets.
+Show the PNG in your agent's image viewer. Keep the connection link and code available as alternatives. The PNG contains device access; remove it after connection or expiry. The command refuses existing files and non-private directories. It generates the image locally.
 
-The default state directory is `~/.p2pme`. Each command accepts `--state-dir /absolute/path` for a separate host. Keep that directory private. Stop the foreground host with Ctrl-C.
+Creating an invitation authorizes one device for the displayed access. The code or QR link completes pairing without another terminal prompt. Invitations expire after ten minutes. A failed code attempt leaves the QR link available. Request a new invitation explicitly if needed.
+
+The browser offers session creation only after the connected host supplies approved contexts. This requires the `sessions:create` grant. Context discovery is available from host version 0.1.1; code and QR setup requires version 0.2.0. The same grant permits context discovery. Older hosts still support session lists and chat.
+
+The default grant permits session lists and chat. It expires after 30 days. It covers sessions registered on that host, including sessions registered later. The local invitation command shows the exact access. Extra scopes require your instruction.
+
+Select **Remember host** during setup or after the verified connection to store this device's access in the browser. Later visits require an explicit **Connect**. **Forget** removes the browser copy. Run `p2pme revoke GRANT_ID` to revoke access at the host. `p2pme status` lists grant IDs without secrets.
+
+The default state directory is `~/.p2pme`. Each command accepts `--state-dir /absolute/path` for a separate host. Keep that directory private. Stop a foreground host with Ctrl-C. An agent can also use its managed background job.
 
 A crash or forced termination can leave `host.lock` and `control.sock` in the state directory. The host refuses automatic removal because another process could still own them.
 
@@ -62,7 +69,7 @@ A crash or forced termination can leave `host.lock` and `control.sock` in the st
 2. Remove only `host.lock` and `control.sock` from that directory.
 3. Start the host again with the same workspace and state directory.
 
-Keep `host.json` and `daemon.json`; they hold the identity, grants and workspace policy. A changed workspace identity needs a separate state directory and new device approval.
+Keep `host.json` and `daemon.json`; they hold the identity, grants and workspace policy. A changed workspace identity needs a separate state directory and new device access.
 
 ## Use your current agent session
 
@@ -91,13 +98,13 @@ Codex loads `.agents/skills/p2pme/SKILL.md`. Invoke `$p2pme` or select the skill
 
 ## Create, delegate and submit controls
 
-A local user can approve extra scopes when they pair a browser:
+A local user can select extra scopes when they create an invitation:
 
 ```sh
-p2pme pair --scopes sessions:list,sessions:chat,sessions:create,tasks:delegate,ui:action --profiles codex,claude
+p2pme invite --scopes sessions:list,sessions:chat,sessions:create,tasks:delegate,ui:action --profiles codex,claude
 ```
 
-Paste the invitation through stdin. Review the expanded grant before approval. Browser controls do not grant their own permissions. A missing scope produces a visible error.
+Review the displayed access before sharing the code or link. Browser controls do not grant their own permissions. A missing scope produces a visible error.
 
 The host fixes each provider profile's workspace and permission policy. Remote callers cannot change executable paths, arguments or environment variables. The initial profiles use `provider-default` as metadata and retain the provider's configured model. Their remote model allowlists are empty. The browser's **Delegate task** option applies to one message and then resets.
 
@@ -125,6 +132,8 @@ try {
 }
 ```
 
+`offerHostPairing` creates a host invitation. `joinHostPairing` accepts its code or decoded QR invitation. The host supplies the authorization and persistence callbacks; browser input cannot select its own grant. See the [host invitation contract](docs/specs/015-host-first-pairing.md) for the public types, cancellation boundary, and authentication protocol. Legacy `beginPairing` and `approvePairing` remain available.
+
 `connectAgentPeer` takes a local Noise key pair, an outgoing log and an approved remote descriptor. The descriptor contains the session ID, Noise public key and log public key. Exchange it through a trusted channel. Native peers reject other Noise keys and verify signed log entries.
 
 Run `npm run example:native` from a source checkout for a complete two-peer exchange. The example uses a local test DHT and synthetic messages.
@@ -142,7 +151,7 @@ Run `npm run example:native` from a source checkout for a complete two-peer exch
 
 The browser does not run Hyperswarm. The host bridges browser requests into the selected local adapter. Browser device grants and native Noise peer descriptors are separate access mechanisms.
 
-Messages are at most 8 KiB. Surfaces are at most 24 KiB. Protocol frames are at most 32 KiB, including the surface envelope. A session log permits 2,048 entries. The host bounds its session and device lists. A host restart creates a new epoch; the client does not retry pending actions automatically. A timed-out action may have run. The native Claude reply wait ends after five minutes. A timeout or cancel stops the wait; Claude can still act on a delivered notification.
+Messages are at most 8 KiB. Surfaces are at most 24 KiB. Protocol frames are at most 32 KiB, including the surface envelope. A session log permits 2,048 entries. The host bounds its session and device lists. A host restart creates a new epoch; the client does not retry pending actions automatically. A timed-out action may have run. Session-list requests stop after 30 seconds and can be refreshed. Other host requests and the native Claude reply wait end after five minutes. A timeout or cancel stops the wait; Claude can still act on a delivered notification.
 
 When a log fills or fails, the host rejects further operations that use it. Restart the host to open fresh logs. The last request may already have reached the provider; inspect the session before you retry.
 
@@ -152,9 +161,11 @@ The local daemon uses a private Unix socket. Local processes under your user acc
 
 ## Privacy and cost
 
-The static app has no account system, analytics, external fonts or hosted chat backend. Page load does not join a peer network. **Connect** and **Create invitation** start discovery. A host restart restores its active approved peer rooms.
+The static app has no account system, analytics, external fonts or hosted chat backend. Ordinary page loads do not join a peer network. **Connect** and a valid QR invitation link start discovery. A host restart restores its active approved peer rooms.
 
-Public Nostr relays at `nos.lol` and `relay.damus.io` carry encrypted discovery offers. Google and Cloudflare STUN servers help establish connections. These services can observe connection metadata. Peer traffic uses WebRTC transport encryption. An invitation and a stored device grant contain access secrets; do not publish them. If you paste the generated setup prompt into an agent, its provider receives the invitation too.
+Public Nostr relays at `nos.lol` and `relay.damus.io` carry discovery offers. The code bootstrap uses public room credentials and OPAQUE password authentication. Grant exchange uses a separate room with a strong secret. QR invitations use a random 256-bit secret. Google and Cloudflare STUN servers help establish connections. These services can observe connection metadata. Peer traffic uses WebRTC transport encryption. An invitation and a stored device grant contain access secrets; do not publish them. The generic setup instruction contains no invitation. An invitation returned in an agent conversation can reach its model provider.
+
+`p2pme cancel-invite ATTEMPT_ID` cancels a pending invitation. Once the grant commit starts, it returns `too-late`; use the grant revocation command to remove access. The legacy `pair` command and its terminal approval remain available for existing integrations.
 
 A remembered grant is readable by scripts on the site's origin. The browser stores no transcript in local storage. Browser extensions and other software on the device remain outside this boundary. Model providers receive the prompts and context their local adapters submit under your existing account.
 
@@ -168,6 +179,6 @@ To opt into the local pre-commit check, run `git config --local core.hooksPath .
 
 GitHub Actions checks pull requests. The Pages workflow builds and uploads only `public/` on `main`, then deploys through the `github-pages` environment. Enable GitHub Pages with Actions as its source. Configure `p2pme.glentiki.dev` as a custom domain and verify DNS before advertising the site. A project URL under `/p2pme/` needs a base-path change because this app uses root-relative links. Cloudflare Pages can use the same build command and output directory.
 
-A `v0.1.1` tag must match package version `0.1.1`. The release workflow runs all checks, packs the package and attaches its tarball to the GitHub release. It does not publish to npm. See [CHANGELOG.md](https://github.com/GlenTiki/p2pme/blob/main/CHANGELOG.md) for release changes.
+A `v0.2.0` tag must match package version `0.2.0`. The release workflow runs all checks, packs the package and attaches its tarball to the GitHub release. It does not publish to npm. See [CHANGELOG.md](https://github.com/GlenTiki/p2pme/blob/main/CHANGELOG.md) for release changes.
 
 MIT © Glen Keane. [More projects and contact](https://glentiki.dev).

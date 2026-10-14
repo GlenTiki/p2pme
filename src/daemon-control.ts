@@ -1,5 +1,7 @@
+import { DaemonInvites, accessSchema } from "./daemon-invites.js";
+import type { HostOffer, HostOfferOptions } from "./host-pairing.js";
 import { z } from "zod";
-import { scopes, type Grant } from "./host-protocol.js";
+import { type Grant } from "./host-protocol.js";
 import type {
   HostController,
   LocalProfile,
@@ -27,6 +29,7 @@ export interface Approval {
   expiresAt: string;
 }
 export interface DaemonTransport {
+  offer?(options: HostOfferOptions): Promise<HostOffer & { url: string }>;
   pair(
     invitation: PairingInvitation,
     record: ConnectionRecord,
@@ -57,21 +60,23 @@ export interface ControlOptions {
   transport: DaemonTransport;
   rooms: Map<string, RtcChannel>;
 }
-const pairSchema = z
-  .object({
-    invitation: z.string().max(2048),
-    principal: z.enum(["human-device", "agent"]),
-    scopes: z.array(z.enum(scopes)).min(1).max(scopes.length),
-    profileIds: z.array(z.string().min(1).max(100)).min(1).max(32),
-  })
+const pairSchema = accessSchema
+  .extend({ invitation: z.string().max(2048) })
   .strict();
 const empty = z.object({}).strict();
 export class DaemonControl {
-  private pairing = false;
+  private readonly invites: DaemonInvites;
   private stopped = false;
-  constructor(private readonly options: ControlOptions) {}
+  constructor(private readonly options: ControlOptions) {
+    this.invites = new DaemonInvites(options, (grant) => this.activate(grant));
+  }
   stop(): void {
     this.stopped = true;
+    this.invites.stop();
+  }
+  async close(): Promise<void> {
+    this.stop();
+    await this.invites.close();
   }
   restore(): void {
     for (const grant of this.options.store.snapshot().grants)
@@ -100,7 +105,7 @@ export class DaemonControl {
     };
   }
   activate(grant: Grant): void {
-    if (this.stopped) return;
+    if (!this.active(grant.id)) return;
     const { host, transport, rooms } = this.options;
     const channel = transport.serve(this.record(grant), {
       host,
@@ -127,6 +132,10 @@ export class DaemonControl {
           request.args,
           AbortSignal.any([signal, AbortSignal.timeout(60000)]),
         );
+      case "invite":
+        return this.invites.invite(request.args);
+      case "cancel-invite":
+        return this.invites.cancel(request.args);
       case "pair":
         return this.pair(request.args, signal);
       case "revoke":
@@ -142,6 +151,7 @@ export class DaemonControl {
     return {
       hostId: host.hostId,
       hostEpoch: host.hostEpoch,
+      invitation: this.invites.status(),
       workspace: policy.workspace,
       profiles: profiles.map(({ id, provider }) => ({ id, provider })),
       sessions: host.sessions(),
@@ -264,17 +274,17 @@ export class DaemonControl {
     args: Record<string, unknown>,
     signal: AbortSignal,
   ): Promise<Record<string, unknown>> {
-    if (this.pairing) throw new Error("Pairing is already pending");
-    const parsed = pairSchema.parse(args);
-    const invitation = decodeInvitation(parsed.invitation);
-    if (this.options.store.snapshot().grants.length >= 32)
-      throw new Error("Host grant limit reached");
-    for (const id of parsed.profileIds) this.profile(id);
-    this.pairing = true;
+    this.invites.reserveLegacy();
     try {
+      const parsed = pairSchema.parse(args);
+      const invitation = decodeInvitation(parsed.invitation);
+      if (this.options.store.snapshot().grants.length >= 32)
+        throw new Error("Host grant limit reached");
+      for (const id of parsed.profileIds) this.profile(id);
+
       return await this.approve(invitation, parsed, signal);
     } finally {
-      this.pairing = false;
+      this.invites.releaseLegacy();
     }
   }
   private async approve(
@@ -300,7 +310,11 @@ export class DaemonControl {
       throw new Error("Pairing was not approved");
     pending.throwIfAborted();
     decodeInvitation(parsed.invitation);
-    await policy.consume(invitation.roomId, invitation.expiresAt);
+    await this.invites.consume(
+      invitation.roomId,
+      invitation.expiresAt,
+      pending,
+    );
     const grant: Grant = {
       label: approval.label,
       principal: approval.principal,

@@ -140,3 +140,31 @@ it("handles a synchronous welcome from a channel factory", async () => {
   expect(client.hostEpoch).toBe(epoch);
   await client.close();
 });
+
+it("times out a session list after 30 seconds while preserving the host connection", async () => {
+  vi.useFakeTimers();
+  const f = fixture();
+  const connection = connectHost(f.record, { channelFactory: f.factory });
+  f.ready(crypto.randomUUID());
+  const client = await connection;
+  try {
+    const settled: string[] = [];
+    const pending = client
+      .request("sessions.list", {})
+      .catch((error: Error) => settled.push(error.message));
+    await vi.advanceTimersByTimeAsync(29999);
+    expect(settled).toEqual([]);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(settled).toEqual([
+      "Request timed out. It may have run; it was not retried.",
+    ]);
+    await pending;
+    const retry = client.request("sessions.list", {}).catch(() => {});
+    expect(f.sent).toHaveLength(2);
+    await client.close();
+    await retry;
+  } finally {
+    await client.close();
+    vi.useRealTimers();
+  }
+});

@@ -95,6 +95,7 @@ export function connectHost(
         request.id,
         pending,
         (frame) => channel!.send(frame),
+        op === "sessions.list" ? 30000 : 300000,
       );
     },
     async close() {
@@ -158,6 +159,7 @@ function sendRequest(
   id: string,
   pending: Map<string, Pending>,
   send: (frame: string) => Promise<void>,
+  timeoutMs: number,
 ): Promise<JsonValue> {
   if (pending.size >= 32)
     return Promise.reject(new Error("Too many pending requests"));
@@ -167,7 +169,7 @@ function sendRequest(
       reject(
         new Error("Request timed out. It may have run; it was not retried."),
       );
-    }, 300000);
+    }, timeoutMs);
     pending.set(id, { resolve, reject, timer });
     void send(frame).catch((error: unknown) => {
       clearTimeout(timer);

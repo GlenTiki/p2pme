@@ -23,6 +23,7 @@ export interface RtcNetwork {
 }
 export interface ChannelOptions {
   credentials: RoomCredentials;
+  maxFrameBytes?: number;
   hello: Record<string, string | number>;
   acceptHello(value: unknown): void;
   onConnect?(): void;
@@ -36,12 +37,16 @@ export interface RtcChannel {
   close(): Promise<void>;
   readonly connected: boolean;
 }
-function config(options: ChannelOptions, network: RtcNetwork): RtcRoomConfig {
+function config(
+  options: ChannelOptions,
+  network: RtcNetwork,
+  limit: number,
+): RtcRoomConfig {
   credentials({ ...options.credentials });
   return {
     appId: "p2pme/1",
     password: options.credentials.secret,
-    maxReceiveBytes: MAX_FRAME_BYTES,
+    maxReceiveBytes: limit,
     relayConfig: {
       urls: network.relayUrls ?? ["wss://nos.lol", "wss://relay.damus.io"],
     },
@@ -60,6 +65,9 @@ export function openRtcChannel(
   options: ChannelOptions,
   network: RtcNetwork = {},
 ): RtcChannel {
+  const limit = options.maxFrameBytes ?? MAX_FRAME_BYTES;
+  if (!Number.isInteger(limit) || limit < 1 || limit > MAX_FRAME_BYTES)
+    throw new Error("Invalid frame limit");
   const slot = reservePeer();
   let active: string | null = null;
   let closed = false;
@@ -69,7 +77,7 @@ export function openRtcChannel(
       value instanceof Error ? value : new Error("Connection failed"),
     );
   const room = (network.join ?? joinRoom)(
-    config(options, network),
+    config(options, network, limit),
     options.credentials.roomId,
     {
       handshakeTimeoutMs: 10000,
@@ -99,11 +107,11 @@ export function openRtcChannel(
   );
   const action = room.makeAction<string>("p2pme");
   action.onReceive = (context) =>
-    context.byteLength <= MAX_FRAME_BYTES && context.kind === "message";
+    context.byteLength <= limit && context.kind === "message";
   action.onMessage = async (frame, context) => {
     if (closed || context.peerId !== active) return;
     try {
-      checkFrame(frame);
+      checkFrame(frame, limit);
       await options.onFrame?.(frame);
     } catch (cause) {
       error(cause);
@@ -126,7 +134,7 @@ export function openRtcChannel(
       return active !== null && !closed;
     },
     async send(frame) {
-      checkFrame(frame);
+      checkFrame(frame, limit);
       if (closed || active === null) throw new Error("Peer is not connected");
       await action.send(frame, { target: active });
     },
@@ -145,10 +153,10 @@ function clearHandlers(room: Room): void {
   room.onPeerJoin = null;
   room.onPeerLeave = null;
 }
-function checkFrame(frame: unknown): asserts frame is string {
+function checkFrame(frame: unknown, limit: number): asserts frame is string {
   if (
     typeof frame !== "string" ||
-    new TextEncoder().encode(frame).length > MAX_FRAME_BYTES
+    new TextEncoder().encode(frame).length > limit
   )
     throw new Error("Invalid frame size");
   JSON.parse(frame);

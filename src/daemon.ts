@@ -159,9 +159,16 @@ class LocalDaemon implements Daemon {
     }
     try {
       if (
-        ["status", "start", "register", "pair", "revoke", "publish"].includes(
-          request.op,
-        )
+        [
+          "status",
+          "start",
+          "register",
+          "pair",
+          "invite",
+          "cancel-invite",
+          "revoke",
+          "publish",
+        ].includes(request.op)
       ) {
         socket.on("data", () => socket.destroy());
         socket.resume();
@@ -212,7 +219,11 @@ class LocalDaemon implements Daemon {
       [...this.rooms.values()].map((room) => room.close()),
     );
     try {
-      await this.host.close();
+      try {
+        await this.control?.close();
+      } finally {
+        await this.host.close();
+      }
     } finally {
       if (this.identity) {
         const current = await lstat(this.socketPath).catch(() => null);

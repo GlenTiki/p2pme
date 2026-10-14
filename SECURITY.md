@@ -20,8 +20,18 @@ A paired device can submit prompts to the selected local agent. Treat an invitat
 
 ## Device access
 
-An invitation is a bearer secret. Anyone with a copied invitation can race the intended browser during pairing. The terminal prompt approves the displayed label and scopes. It does not prove a person's identity. Keep invitations private and create a fresh one if exposure is possible. The app can include the invitation in a copied agent setup prompt. Pasting that prompt into an agent sends the invitation to its model provider and can retain it in the conversation.
+A host invitation authorizes one device for the scopes and profiles selected locally. Anyone with its code or QR link can race the intended device. Its label does not prove a person's identity. Keep invitations private and cancel them if exposure is possible. A returned invitation can remain in the local agent conversation and reach its model provider. The generic setup instruction contains no invitation.
+
+The short code uses a public locator and a separate 40-bit secret. OPAQUE authenticates that secret before the peers open a private grant room. The host permits one authentication exchange per code. A failed or idle code peer can disable that code path. The separate QR link remains available. QR links contain random 256-bit secrets. The application consumes authentication state once and admits one device across both paths.
+
+Cancellation succeeds only before the durable grant commit starts. A `too-late` result does not revoke access. A failed write can be uncertain if the filesystem has already replaced the state file. Inspect the grant list and revoke unwanted access. Legacy browser-first pairing retains its separate terminal approval.
+
+Any process with access to the private control socket can create an invitation and select available scopes and profiles. The skill guides agent behavior; it does not constrain a malicious local process. Provider tool and file permissions still apply.
+
+The public code exchange reveals the QR room ID, but keeps its random secret private. The QR path survives code authentication failures. Floods against public discovery can still disrupt either path.
 
 A remembered grant contains permanent room credentials until expiry or revocation. Scripts on the app's origin can read browser storage. Forget removes the local copy; `p2pme revoke GRANT_ID` revokes the grant at the host. Do not share browser profiles that hold device access.
 
-Public rendezvous and STUN providers can observe connection metadata. The app does not contact them on page load. A connection request or host recovery of an active grant starts discovery. Provider accounts, workspace permissions and local processes remain outside p2pme's device boundary.
+Public rendezvous and STUN providers can observe connection metadata. An ordinary page load does not contact them. A connection request, valid QR link, local invitation, or host recovery of an active grant starts discovery. Provider accounts, workspace permissions and local processes remain outside p2pme's device boundary.
+
+An invitation PNG contains the same secret as its QR link. `invite --qr-file` creates a new mode-0600 file in an existing private directory owned by the local user. It never overwrites an existing path. The skill removes its image after connection or expiry. Display the image only in the user’s setup conversation; do not commit or publish it.
