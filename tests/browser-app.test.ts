@@ -41,6 +41,8 @@ function el<T extends HTMLElement>(id: string) {
   return document.getElementById(id) as T;
 }
 async function submit(id: string) {
+  if (id === "connect-form" && !el<HTMLInputElement>("pairing-code").value)
+    el<HTMLInputElement>("pairing-code").value = "7K3M2Q-9RX4TW6P";
   el(id).dispatchEvent(
     new Event("submit", { bubbles: true, cancelable: true }),
   );
@@ -51,6 +53,7 @@ beforeEach(() => {
   options = undefined;
   document.body.innerHTML = readFileSync("public/index.html", "utf8");
   localStorage.clear();
+  el<HTMLInputElement>("pairing-code").value = "7K3M2Q-9RX4TW6P";
   client = {
     hostId: host.hostId,
     hostEpoch: crypto.randomUUID(),
@@ -70,14 +73,7 @@ beforeEach(() => {
       options = callbacks;
       return client;
     }),
-    pair: vi.fn(() => ({
-      invitation: {
-        version: 1 as const,
-        roomId: host.roomId,
-        secret: host.secret,
-        label: "Phone",
-        expiresAt: "2099-01-01T00:00:00Z",
-      },
+    join: vi.fn(() => ({
       completion: new Promise<ConnectionRecord>((resolve) => {
         acceptPair = resolve;
       }),
@@ -91,6 +87,107 @@ afterEach(async () => {
   });
 });
 describe("browser connection controls", () => {
+  it("shows the generic setup instruction before pairing without discovery", () => {
+    app = createBrowserApp(document, deps);
+    expect(el<HTMLTextAreaElement>("agent-prompt").value).toContain(
+      "Read https://p2pme.glentiki.dev/host",
+    );
+    expect(el<HTMLTextAreaElement>("agent-prompt").value).not.toContain(
+      host.secret,
+    );
+    expect(el("agent-prompt").closest("[hidden]")).toBeNull();
+    expect(el<HTMLInputElement>("remember-host").checked).toBe(false);
+    expect(deps.join).not.toHaveBeenCalled();
+  });
+  it("joins the supplied code once and clears it on cancellation", async () => {
+    app = createBrowserApp(document, deps);
+    await submit("connect-form");
+    await submit("connect-form");
+    expect(deps.join).toHaveBeenCalledTimes(1);
+    expect(deps.join).toHaveBeenCalledWith("7K3M2Q-9RX4TW6P", "My browser");
+    await app.disconnect();
+    expect(el<HTMLInputElement>("pairing-code").value).toBe("");
+  });
+  it("autostarts a validated QR and offers an explicit save only after welcome", async () => {
+    const invitation = {
+      version: 1 as const,
+      roomId: host.roomId,
+      secret: host.secret,
+      label: "Host offer",
+      expiresAt: "2020-01-01T00:00:00Z",
+    };
+    let connected!: (value: HostClient) => void;
+    deps.connect = vi.fn(
+      () =>
+        new Promise<HostClient>((resolve) => {
+          connected = resolve;
+        }),
+    );
+    app = createBrowserApp(document, deps, { kind: "invitation", invitation });
+    expect(deps.join).toHaveBeenCalledWith(invitation, "My browser");
+    expect(el("remember-connected-host").hidden).toBe(true);
+    acceptPair(host);
+    await tick();
+    expect(el("remember-connected-host").hidden).toBe(true);
+    connected(client);
+    await tick();
+    expect(localStorage.getItem("p2pme.hosts.v1")).toBeNull();
+    expect(el("remember-connected-host").hidden).toBe(false);
+    el<HTMLButtonElement>("remember-connected-host").click();
+    await tick();
+    expect(localStorage.getItem("p2pme.hosts.v1")).toContain(host.grantId);
+    expect(el("remember-connected-host").hidden).toBe(true);
+  });
+  it("discards a late grant after cancellation and hides the save action", async () => {
+    app = createBrowserApp(document, deps);
+    await submit("connect-form");
+    await app.disconnect();
+    acceptPair(host);
+    await tick();
+    expect(deps.connect).not.toHaveBeenCalled();
+    expect(el("remember-connected-host").hidden).toBe(true);
+    expect(el<HTMLTextAreaElement>("agent-prompt").value).toContain("/p2pme");
+    expect(localStorage.getItem("p2pme.hosts.v1")).toBeNull();
+  });
+
+  it("does not replace a pending or connected host from another QR link", async () => {
+    app = createBrowserApp(document, deps);
+    await submit("connect-form");
+    const invitation = {
+      version: 1 as const,
+      roomId: host.roomId,
+      secret: host.secret,
+      label: "Other host",
+      expiresAt: "2020-01-01T00:00:00Z",
+    };
+    app.openPairingLink({ kind: "invitation", invitation });
+    expect(deps.join).toHaveBeenCalledTimes(1);
+    expect(el("app-feedback").textContent).toBe(
+      "Disconnect, then open the connection link again.",
+    );
+    acceptPair(host);
+    await tick();
+    app.openPairingLink({ kind: "invitation", invitation });
+    expect(deps.join).toHaveBeenCalledTimes(1);
+    expect(el("host-id").textContent).toContain(host.hostId);
+  });
+
+  it("reports invalid QR links without starting discovery", () => {
+    app = createBrowserApp(document, deps, { kind: "invalid" });
+    expect(deps.join).not.toHaveBeenCalled();
+    expect(el("app-feedback").textContent).toContain("invalid");
+  });
+  it("does not expose secret-bearing pairing errors or retry", async () => {
+    deps.join = vi.fn(() => {
+      throw new Error("password private-secret failed");
+    });
+    app = createBrowserApp(document, deps);
+    await submit("connect-form");
+    expect(deps.join).toHaveBeenCalledTimes(1);
+    expect(el("app-feedback").textContent).not.toContain("private-secret");
+    expect(el("app-feedback").textContent).toContain("Pairing failed");
+    expect(el("connection-status-text").textContent).toBe("Not connected");
+  });
   it("hides creation until the connected host supplies contexts and clears them on disconnect", async () => {
     let profiles!: (value: JsonValue) => void;
     const request = client.request;
@@ -454,7 +551,7 @@ describe("browser connection controls", () => {
     localStorage.setItem("p2pme.hosts.v1", JSON.stringify([host]));
     app = createBrowserApp(document, deps);
     expect(deps.connect).not.toHaveBeenCalled();
-    expect(deps.pair).not.toHaveBeenCalled();
+    expect(deps.join).not.toHaveBeenCalled();
     expect(el("host-list").textContent).toContain("My phone");
     expect(el<HTMLButtonElement>("send-message").disabled).toBe(true);
   });
@@ -572,7 +669,7 @@ describe("browser connection controls", () => {
     });
     app = createBrowserApp(document, deps);
     await submit("connect-form");
-    el<HTMLButtonElement>("copy-invitation").click();
+    el<HTMLButtonElement>("copy-agent-prompt").click();
     await tick();
     expect(el("app-feedback").textContent).toContain("Copy failed");
     acceptPair(host);

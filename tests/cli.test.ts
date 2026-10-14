@@ -228,3 +228,101 @@ describe("safe CLI startup errors", () => {
     );
   });
 });
+
+describe("host-first invitation CLI", () => {
+  it("requests the default access without stdin or a terminal prompt and renders a local QR", async () => {
+    const f = fixture();
+    const result = {
+      attemptId: crypto.randomUUID(),
+      expiresAt: "2026-10-14T12:10:00Z",
+      code: "7K3M2Q-9RX4TW6P",
+      url: "https://p2pme.glentiki.dev/#pair=example",
+      access: {
+        principal: "human-device",
+        scopes: ["sessions:list", "sessions:chat"],
+        profileIds: ["codex"],
+        workspace: "/workspace",
+        sessionAccess: "registered",
+      },
+    };
+    await runCli(["invite", "--profiles", "codex"], {
+      ...f.options,
+      input: new Readable({
+        read() {
+          this.destroy(new Error("Must not read stdin"));
+        },
+      }),
+      request: async (_socket, request) => {
+        f.requests.push(request);
+        return { id: request.id, ok: true, result };
+      },
+    });
+    expect(f.requests[0]).toMatchObject({
+      op: "invite",
+      args: {
+        principal: "human-device",
+        scopes: ["sessions:list", "sessions:chat"],
+        profileIds: ["codex"],
+      },
+    });
+    expect(f.output()).toContain(result.code);
+    expect(f.output()).toContain(result.url);
+    expect(f.output()).toContain(result.expiresAt);
+    expect(f.output()).toContain("current and future registered sessions");
+    expect(f.output()).toContain(
+      "existing tools and return local file content",
+    );
+    expect(f.output()).toMatch(/[\u2580-\u259f]/u);
+    expect(f.output()).not.toContain("\\u001b");
+  });
+  it("cancels the exact invitation and preserves explicit agent access", async () => {
+    const f = fixture();
+    const attemptId = crypto.randomUUID();
+    await runCli(["cancel-invite", attemptId], f.options);
+    expect(f.requests[0]).toMatchObject({
+      op: "cancel-invite",
+      args: { attemptId },
+    });
+    await runCli(
+      [
+        "invite",
+        "--profiles",
+        "codex,claude",
+        "--agent",
+        "--scopes",
+        "sessions:list,tasks:delegate",
+      ],
+      {
+        ...f.options,
+        request: async (_socket, request) => {
+          f.requests.push(request);
+          return {
+            id: request.id,
+            ok: true,
+            result: { url: "https://p2pme.glentiki.dev/#pair=example" },
+          };
+        },
+      },
+    );
+    expect(f.requests[1]).toMatchObject({
+      op: "invite",
+      args: {
+        principal: "agent",
+        scopes: ["sessions:list", "tasks:delegate"],
+        profileIds: ["codex", "claude"],
+      },
+    });
+  });
+  it.each([
+    { args: ["invite"] },
+    { args: ["invite", "--profiles", "codex", "--yes"] },
+    { args: ["cancel-invite"] },
+  ])(
+    "rejects incomplete or unrecognized invitation arguments %j",
+    async ({ args }) => {
+      const f = fixture();
+      await expect(runCli(args, f.options)).rejects.toThrow();
+      expect(f.requests).toEqual([]);
+    },
+  );
+});

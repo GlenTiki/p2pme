@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta
       name="description"
-      content="Set up a p2pme host for Claude Code and Codex. Learn how host IDs, session IDs, local approval and the p2pme skill work."
+      content="Set up a p2pme host for Claude Code and Codex. Learn how host IDs, session IDs, invitation codes and the p2pme skill work."
     />
     <meta name="theme-color" content="#f7f6ef" />
     <title>Host setup — p2pme by Glen Keane</title>
@@ -75,15 +75,16 @@
                 and release before you install it.
               </p>
               <div class="code-block">
-                <span class="code-label">RELEASE · 0.1.1</span
+                <span class="code-label">RELEASE · 0.2.0</span
                 ><code
                   >npm install --global
-                  https://github.com/GlenTiki/p2pme/releases/download/v0.1.1/glentiki-p2pme-0.1.1.tgz</code
+                  https://github.com/GlenTiki/p2pme/releases/download/v0.2.0/glentiki-p2pme-0.2.0.tgz</code
                 >
               </div>
               <p class="field-help">
-                Install version 0.1.1 from the GitHub release. The package
-                includes the CLI, library and skill.
+                Install version 0.2.0 from the GitHub release. The package
+                includes the CLI, library and skill. After an upgrade, restart
+                the local host and register the selected sessions again.
               </p>
               <p>
                 <a
@@ -111,7 +112,7 @@
               </p>
               <div class="code-block">
                 <span class="code-label"
-                  >LOCAL HOST · KEEP THIS TERMINAL OPEN</span
+                  >LOCAL HOST · KEEP THIS PROCESS RUNNING</span
                 >
                 <code>p2pme host --workspace /absolute/path/to/project</code>
               </div>
@@ -151,7 +152,8 @@
               </dl>
               <p>
                 The skill registers your chosen session. It does not expose
-                every session on your computer.
+                every session on your computer. An agent can keep the host alive
+                in its managed background job.
               </p>
               <div class="guide-notice">
                 <h3>Claude Code and Codex</h3>
@@ -185,26 +187,27 @@
             <div>
               <h2 id="pair-title">Pair your browser</h2>
               <ol class="instruction-list">
-                <li>Open <a href="/">p2pme.glentiki.dev</a> on your phone.</li>
                 <li>
-                  Name the browser and choose whether it should remember the
-                  host.
+                  Ask your local agent to use p2pme for the selected session.
                 </li>
                 <li>
-                  Select Create invitation. Copy the agent prompt to your local
-                  session.
+                  The agent runs <code>p2pme invite --profiles codex</code> and
+                  shows the access, code, link, and QR code.
                 </li>
                 <li>
-                  Run <code>p2pme pair --profiles codex</code> in your own
-                  terminal. Paste the invitation through stdin. End input with
-                  Ctrl-D.
+                  Enter the code at <a href="/">p2pme.glentiki.dev</a>, or scan
+                  the QR code with your phone.
                 </li>
-                <li>
-                  Check the displayed scope. Type <code>approve</code> at the
-                  foreground host terminal prompt.
-                </li>
-                <li>Select a registered session to send a message.</li>
+                <li>Select a registered session after the host connects.</li>
+                <li>Select Remember host to save access on this browser.</li>
               </ol>
+              <p>
+                Keep the code and link private. A failed code attempt leaves the
+                QR link available. To replace an invitation, cancel its attempt
+                ID with <code>p2pme cancel-invite ATTEMPT_ID</code>, then create
+                a new one. A too-late result means the grant commit has started;
+                use the grant revocation command to remove access.
+              </p>
               <p>
                 You do not need an account. A remembered host lets you return to
                 its registered sessions. You can revoke the device separately
@@ -217,9 +220,10 @@
                 required.
               </p>
               <p>
-                The default grant allows session lists and chat for registered
-                sessions. It expires after 30 days. An invitation is a bearer
-                secret. Its label does not prove a person's identity.
+                The invitation authorizes one device for the displayed access.
+                The code or QR scan completes pairing without another terminal
+                prompt. The invitation expires after ten minutes. The default
+                grant allows session lists and chat, and expires after 30 days.
               </p>
               <p>
                 Your agent keeps its local tool and file permissions. The
@@ -239,15 +243,17 @@
             </p>
             <p>
               GitHub Pages serves the static app. Public Nostr relays at nos.lol
-              and relay.damus.io carry encrypted discovery offers. Google and
-              Cloudflare STUN servers help peers connect. These services can see
-              connection metadata.
+              and relay.damus.io carry discovery offers. The short code uses
+              password authentication before a private grant exchange. Google
+              and Cloudflare STUN servers help peers connect. These services can
+              see connection metadata.
             </p>
             <p>
-              The app contacts those services only after you select Connect or
-              Create invitation. It operates no hosted chat server. Direct
-              connections can fail on restrictive networks. An operator can
-              supply TURN; that relay can incur costs.
+              The browser contacts those services after you select Connect or
+              open a valid QR invitation link. The host contacts them when it
+              creates an invitation or restores an active grant. It operates no
+              hosted chat server. Direct connections can fail on restrictive
+              networks. An operator can supply TURN; that relay can incur costs.
             </p>
             <a class="text-link" href="https://github.com/GlenTiki/p2pme"
               >Read the source and specifications

@@ -10,21 +10,21 @@ import { RTCPeerConnection } from "werift";
 import { expect, it } from "vitest";
 import { createHost, type SessionAdapter } from "../src/host.js";
 import { openHostStore } from "../src/host-store.js";
-import { approvePairing } from "../src/pairing.js";
+import { offerHostPairing } from "../src/host-pairing.js";
 import { serveHostConnection } from "../src/host-connection.js";
-import { decodeInvitation, randomSecret } from "../src/rtc-identity.js";
+import { randomSecret } from "../src/rtc-identity.js";
 import type { RtcChannel } from "../src/rtc-channel.js";
 import { demoSurface } from "../web/demo.js";
 
 async function serveApp(network: { relayUrls: string[]; iceServers: never[] }) {
   const source = `
     import {createBrowserApp} from './web/browser-app.ts';
-    import {beginPairing} from './src/pairing.ts';
+    import {joinHostPairing} from './src/host-pairing.ts';
     import {connectHost} from './src/host-client.ts';
     import {joinRoom} from '@trystero-p2p/ws-relay';
     const network={...${JSON.stringify(network)},join:joinRoom};
     window.app=createBrowserApp(document,{
-      pair:label=>beginPairing(label,{network}),
+      join:(input,label)=>joinHostPairing(input,label,{network}),
       connect:(grant,options)=>connectHost(grant,{...options,network}),
       copy:async()=>{},storage:localStorage
     });`;
@@ -35,7 +35,10 @@ async function serveApp(network: { relayUrls: string[]; iceServers: never[] }) {
     format: "esm",
     platform: "browser",
   });
-  const html = await readFile("public/index.html", "utf8");
+  const html = (await readFile("public/index.html", "utf8")).replace(
+    "connect-src 'self'",
+    `connect-src 'self' ${network.relayUrls[0]}`,
+  );
   const css = await readFile("public/styles.css", "utf8");
   const server = createServer((request, response) => {
     if (request.url === "/app.js") {
@@ -120,50 +123,63 @@ it("pairs the real browser UI and delivers a typed surface action to the selecte
     headless: true,
     args: ["--disable-features=WebRtcHideLocalIpsWithMdns"],
   });
+  let offer: Awaited<ReturnType<typeof offerHostPairing>> | undefined;
   try {
     const page = await browser.newPage();
     const errors: string[] = [];
     page.on("pageerror", (error) => errors.push(error.message));
     await page.goto(app.url);
-    await page.waitForFunction("window.app !== undefined");
+    await page.waitForFunction(() => Object.hasOwn(window, "app"));
     await page.locator("#device-label").fill("Test browser");
     await page.locator("#remember-host").check();
-    await page.locator("#connect-host").click();
-    const code = await page.locator("#pairing-code").inputValue();
-    await approvePairing(decodeInvitation(code), grant, {
+    offer = await offerHostPairing({
+      label: "Browser test host",
       network: native,
-      persist: () =>
-        store.update((state) => {
-          state.grants.push({
-            id: grant.grantId,
-            deviceId: crypto.randomUUID(),
-            principal: "human-device",
-            label: grant.label,
-            roomId: grant.roomId,
-            roomSecret: grant.secret,
-            createdAt: new Date().toISOString().replace(/\.\d{3}Z$/, "Z"),
-            expiresAt: grant.expiresAt,
-            revokedAt: null,
-            scopes: ["sessions:list", "ui:action"],
-            sessionAccess: [session.id],
-            profileIds: ["test"],
-          });
-        }),
-      activate: async () => {
-        permanent = serveHostConnection(grant, {
-          network: native,
-          hostEpoch: host.hostEpoch,
-          active: () => store.healthy,
-          dispatch: (frame) => host.dispatch(grant.grantId, JSON.parse(frame)),
-        });
+      authorize: async (label) => {
+        grant.label = label;
+        return {
+          record: grant,
+          persist: (beginCommit) =>
+            store.update((state) => {
+              beginCommit();
+              state.grants.push({
+                id: grant.grantId,
+                deviceId: crypto.randomUUID(),
+                principal: "human-device",
+                label: grant.label,
+                roomId: grant.roomId,
+                roomSecret: grant.secret,
+                createdAt: new Date().toISOString().replace(/\.\d{3}Z$/, "Z"),
+                expiresAt: grant.expiresAt,
+                revokedAt: null,
+                scopes: ["sessions:list", "ui:action"],
+                sessionAccess: [session.id],
+                profileIds: ["test"],
+              });
+            }),
+          activate: async () => {
+            permanent = serveHostConnection(grant, {
+              network: native,
+              hostEpoch: host.hostEpoch,
+              active: () => store.healthy,
+              dispatch: (frame) =>
+                host.dispatch(grant.grantId, JSON.parse(frame)),
+            });
+          },
+        };
       },
     });
+    await page.locator("#pairing-code").fill(offer.code);
+    await page.locator("#connect-host").click();
+    await offer.completion;
+    await offer.close();
     await page
       .getByRole("button", { name: "Browser test session · test", exact: true })
       .click();
-    await page.waitForFunction(
-      "document.getElementById('selected-session').textContent.includes('Browser test session')",
-    );
+    await page
+      .locator("#selected-session")
+      .filter({ hasText: "Browser test session" })
+      .waitFor();
     await host.publishSurface(session.id, demoSurface);
     const surface = page.locator("#session-surface");
     await surface
@@ -174,9 +190,10 @@ it("pairs the real browser UI and delivers a typed surface action to the selecte
       await surface.getByRole("heading", { name: "Task note" }).isVisible(),
     ).toBe(true);
     await surface.getByRole("button", { name: "Try a local action" }).click();
-    await page.waitForFunction(
-      "document.getElementById('messages').textContent.includes('Action received')",
-    );
+    await page
+      .locator("#messages")
+      .getByText("Action received", { exact: true })
+      .waitFor();
     expect(submitted).toHaveLength(1);
     expect(JSON.parse(submitted[0]!)).toMatchObject({
       type: "ui.action",
@@ -192,6 +209,7 @@ it("pairs the real browser UI and delivers a typed surface action to the selecte
     expect(errors).toEqual([]);
     await page.evaluate("window.app.dispose()");
   } finally {
+    await offer?.close();
     await browser.close();
     await permanent?.close();
     await host.close();

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.0
+
+- Create a local invitation with a code, connection link, and terminal QR code.
+- Authorize one browser through that invitation, with the access selected locally.
+- Authenticate typed codes with OPAQUE before a private grant exchange.
+- Keep the QR path available if the public code path fails.
+- Save a verified host from the browser after a QR connection.
+- Preserve the legacy pairing API and its separate terminal approval.
+
 ## 0.1.1
 
 - Hide session creation until the connected host supplies approved contexts.

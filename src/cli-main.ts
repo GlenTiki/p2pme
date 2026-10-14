@@ -1,3 +1,5 @@
+import QRCode from "qrcode";
+import { createHostInvitationUrl } from "./rtc-identity.js";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { readFile, realpath, stat } from "node:fs/promises";
@@ -17,7 +19,7 @@ import { approvePairing } from "./pairing.js";
 import { serveHostConnection } from "./host-connection.js";
 import type { LocalProfile } from "./host-types.js";
 
-const help = `p2pme host --workspace PATH [--state-dir PATH]\np2pme pair --profiles codex,claude [--agent] [--scopes LIST]\np2pme status\np2pme start codex|claude\np2pme register codex THREAD_ID\np2pme revoke GRANT_ID\np2pme ui publish SESSION_ID FILE\np2pme claude-setup SESSION_UUID --output-dir PATH\nPair reads the invitation from stdin. Approve on the host terminal.\nAll commands accept --state-dir PATH.\n`;
+const help = `p2pme host --workspace PATH [--state-dir PATH]\np2pme invite --profiles codex,claude [--agent] [--scopes LIST]\np2pme cancel-invite ATTEMPT_UUID\np2pme pair --profiles codex,claude [--agent] [--scopes LIST]\np2pme status\np2pme start codex|claude\np2pme register codex THREAD_ID\np2pme revoke GRANT_ID\np2pme ui publish SESSION_ID FILE\np2pme claude-setup SESSION_UUID --output-dir PATH\nInvite prints a code and QR. Possession authorizes one device with the stated access.\nLegacy pair reads the invitation from stdin. Approve on the host terminal.\nAll commands accept --state-dir PATH.\n`;
 export interface CliOptions {
   input?: Readable;
   output?: Writable;
@@ -68,13 +70,15 @@ function pairingFlags(args: string[]): Record<string, unknown> {
       throw new Error("Missing pairing value");
     parsed[flag === "--scopes" ? "scopes" : "profileIds"] = value.split(",");
   }
-  if (!parsed.profileIds) throw new Error("Pair requires --profiles");
+  if (!parsed.profileIds) throw new Error("Pairing requires --profiles");
   return parsed;
 }
 async function command(
   args: string[],
   input: Readable,
 ): Promise<{ op: string; args: Record<string, unknown> }> {
+  if (args[0] === "invite")
+    return { op: "invite", args: pairingFlags(args.slice(1)) };
   if (args[0] === "pair")
     return {
       op: "pair",
@@ -90,6 +94,8 @@ async function command(
       return { op: "start", args: { profileId: args[1] } };
     case "register:3":
       return { op: "register", args: { provider: args[1], threadId: args[2] } };
+    case "cancel-invite:2":
+      return { op: "cancel-invite", args: { attemptId: args[1] } };
     case "revoke:2":
       return { op: "revoke", args: { grantId: args[1] } };
     case "ui:4":
@@ -149,6 +155,13 @@ async function host(
         attachCodex({ threadId, expectedCwd: workspace }),
       extensions: [createClaudeChannelExtension({ workspace })],
       transport: {
+        offer: async (options) => {
+          const { offerHostPairing } = await import("./host-pairing.js");
+          const offer = await offerHostPairing({ ...options, network });
+          return Object.assign(offer, {
+            url: createHostInvitationUrl(offer.invitation),
+          });
+        },
         pair: (invitation, record, callbacks) =>
           approvePairing(invitation, record, { ...callbacks, network }),
         serve: (record, callbacks) =>
@@ -161,7 +174,7 @@ async function host(
       },
     });
     (options.output ?? process.stdout).write(
-      `p2pme host ${daemon.host.hostId}\nApprove device grants on this terminal.\n`,
+      `p2pme host ${daemon.host.hostId}\nRun p2pme invite to authorize a device with a code or QR. Legacy pair approval uses this terminal.\n`,
     );
     await new Promise<void>((done, reject) => {
       const stop = () => {
@@ -199,5 +212,31 @@ export async function runCli(
     { id: crypto.randomUUID(), ...request },
     request.op === "pair" ? 600000 : 60000,
   );
-  output.write(terminalJson(response.result) + "\n");
+  await printResponse(request.op, response.result, output);
+}
+
+async function printInvitation(
+  result: Record<string, unknown>,
+  output: Writable,
+): Promise<void> {
+  if (typeof result.url !== "string")
+    throw new Error("Invalid invitation response");
+  const qr = await QRCode.toString(result.url, {
+    type: "terminal",
+    small: true,
+  });
+  output.write(
+    "This invitation authorizes one device. Access includes current and future registered sessions in these profiles. Chat, UI actions and delegated tasks can use the provider's existing tools and return local file content.\n",
+  );
+  output.write(terminalJson(result) + "\n");
+  output.write(qr);
+}
+
+async function printResponse(
+  op: string,
+  result: Record<string, unknown>,
+  output: Writable,
+): Promise<void> {
+  if (op === "invite") await printInvitation(result, output);
+  else output.write(terminalJson(result) + "\n");
 }

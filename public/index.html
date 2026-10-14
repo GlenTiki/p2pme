@@ -2,10 +2,14 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self'; connect-src 'self' wss://nos.lol wss://relay.damus.io; base-uri 'none'; form-action 'none'; object-src 'none'"
+    />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta
       name="description"
-      content="p2pme is an open-source project by Glen Keane. Connect your phone to a local agent session, with local approval."
+      content="p2pme is an open-source project by Glen Keane. Connect your phone to a local agent session with a private code or QR link."
     />
     <meta name="theme-color" content="#f7f6ef" />
     <title>p2pme — Connect agents. Control the work.</title>
@@ -56,7 +60,8 @@
             >
           </div>
           <p class="hero-note">
-            Built with Hypercore. Pair with local approval. No account required.
+            Built with Hypercore. Pair with a code or QR link. No account
+            required.
           </p>
         </div>
         <figure
@@ -82,7 +87,7 @@
             ><span class="device-symbol" aria-hidden="true">⌘</span>
             <div>
               <strong>Your local host</strong
-              ><span>One host ID. Your approval.</span>
+              ><span>One host ID. Your chosen sessions.</span>
             </div>
           </div>
           <div class="session-branches">
@@ -144,7 +149,7 @@ Use “Try a local action” to inspect its data.</pre>
           </p>
         </div>
         <p class="development-note">
-          Create an invitation. Approve this browser on your local host. Then
+          Ask your local agent for a code or QR link. Connect this browser. Then
           choose a registered session.
         </p>
         <p id="app-feedback" class="app-feedback" role="status"></p>
@@ -154,7 +159,33 @@ Use “Try a local action” to inspect its data.</pre>
               <h3 id="host-heading">01 / Your host</h3>
               <a href="/host/">Setup guide <span aria-hidden="true">↗</span></a>
             </div>
+            <div class="agent-setup">
+              <label for="agent-prompt"
+                >First, paste this into your local agent</label
+              >
+              <textarea id="agent-prompt" rows="4" readonly spellcheck="false">
+Read https://p2pme.glentiki.dev/host and use the p2pme skill for this session. Return a pairing code and QR link with the access they grant.</textarea>
+              <button class="text-button" id="copy-agent-prompt" type="button">
+                Copy agent instruction
+              </button>
+              <p class="field-help">
+                The agent sets up the host and selected session. Keep its code
+                and QR link private.
+              </p>
+            </div>
             <form id="connect-form">
+              <label for="pairing-code">Pairing code from your agent</label>
+              <input
+                id="pairing-code"
+                name="code"
+                type="text"
+                maxlength="64"
+                placeholder="7K3M2Q-9RX4TW6P"
+                autocomplete="off"
+                autocapitalize="characters"
+                spellcheck="false"
+                required
+              />
               <label for="device-label">Name this browser</label>
               <input
                 id="device-label"
@@ -180,45 +211,22 @@ Use “Try a local action” to inspect its data.</pre>
                 id="connect-host"
                 type="submit"
               >
-                Create invitation <span aria-hidden="true">→</span>
+                Connect <span aria-hidden="true">→</span>
               </button>
               <p class="field-help">
-                This starts public relay discovery. Approve the device locally.
-                No account is required.
+                Connect starts public relay discovery. The code or QR link
+                grants one device the stated access. No extra terminal prompt is
+                required.
               </p>
             </form>
-            <div id="pairing-panel" hidden>
-              <label for="pairing-code">Browser invitation</label>
-              <textarea
-                id="pairing-code"
-                rows="3"
-                readonly
-                spellcheck="false"
-              ></textarea>
-              <button class="text-button" id="copy-invitation" type="button">
-                Copy invitation
-              </button>
-              <label for="agent-prompt"
-                >Paste this into your agent session</label
-              >
-              <textarea
-                id="agent-prompt"
-                rows="5"
-                readonly
-                spellcheck="false"
-              ></textarea>
-              <button class="text-button" id="copy-agent-prompt" type="button">
-                Copy agent prompt
-              </button>
-              <p class="field-help">
-                The agent reads the host guide. You run
-                <code>p2pme pair --profiles codex</code>, select the profiles
-                you want, and paste the invitation. You approve the device in
-                the foreground host terminal. The agent cannot approve for you.
-                The agent prompt includes a one-use invitation, which becomes
-                part of that conversation.
-              </p>
-            </div>
+            <button
+              class="text-button"
+              id="remember-connected-host"
+              type="button"
+              hidden
+            >
+              Remember this connected host
+            </button>
             <p class="host-identity" id="host-id"></p>
             <button
               class="text-button"

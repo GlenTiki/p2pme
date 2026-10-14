@@ -122,16 +122,10 @@
   font-size: 0.7rem;
   overflow-wrap: anywhere;
 }
-#pairing-panel {
-  margin-top: 23px;
-}
-#pairing-panel label {
-  margin-top: 20px;
-}
-#pairing-panel textarea {
+.agent-setup textarea {
   font-size: 0.7rem;
 }
-#pairing-panel .text-button {
+.agent-setup .text-button {
   margin-block: 7px 0;
 }
 #host-list li {
@@ -1198,4 +1192,10 @@ input[type="checkbox"] {
   html {
     scroll-behavior: auto;
   }
+}
+
+.agent-setup {
+  margin-bottom: 24px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--line);
 }

@@ -1,6 +1,6 @@
 {
   "name": "@glentiki/p2pme",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Hypercore agent peers, approved local sessions, and reactive browser controls.",
   "type": "module",
   "license": "MIT",
@@ -43,9 +43,11 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.32.1",
+    "@serenity-kit/opaque": "1.1.0",
     "hypercore": "11.38.0",
     "hyperdht": "6.34.1",
     "hyperswarm": "4.17.2",
+    "qrcode": "1.5.4",
     "trystero": "0.26.0",
     "werift": "0.25.0",
     "ws": "8.22.0",
@@ -55,6 +57,7 @@
     "@eslint/js": "10.0.1",
     "@trystero-p2p/ws-relay": "0.26.0",
     "@types/node": "22.20.5",
+    "@types/qrcode": "1.5.6",
     "@types/ws": "8.18.2",
     "esbuild": "0.28.2",
     "eslint": "10.12.0",

@@ -20,3 +20,10 @@ export {
   type PairingInvitation,
   type ConnectionRecord,
 } from "./rtc-identity.js";
+
+export * from "./host-pairing.js";
+export {
+  decodeHostInvitation,
+  createHostInvitationUrl,
+  validateLabel,
+} from "./rtc-identity.js";

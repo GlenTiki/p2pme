@@ -45,19 +45,24 @@ export function credentials(value: JsonObject): void {
   )
     throw new Error("Invalid room credentials");
 }
-function details(value: JsonObject): void {
+export function validateLabel(label: unknown): asserts label is string {
   if (
-    typeof value.label !== "string" ||
-    value.label.length < 1 ||
-    value.label.length > 100 ||
-    value.label.normalize("NFC") !== value.label ||
-    /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}\p{Cn}]/u.test(value.label)
+    typeof label !== "string" ||
+    label.length < 1 ||
+    label.length > 100 ||
+    label.normalize("NFC") !== label ||
+    /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}\p{Cn}]/u.test(label)
   )
     throw new Error("Invalid device label");
+}
+function details(value: JsonObject): void {
+  validateLabel(value.label);
   if (
     typeof value.expiresAt !== "string" ||
     !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(value.expiresAt) ||
-    !Number.isFinite(Date.parse(value.expiresAt))
+    !Number.isFinite(Date.parse(value.expiresAt)) ||
+    new Date(value.expiresAt).toISOString().replace(/\.\d{3}Z$/, "Z") !==
+      value.expiresAt
   )
     throw new Error("Invalid expiry");
 }
@@ -85,10 +90,7 @@ export function encodeInvitation(invitation: PairingInvitation): string {
     .replaceAll("/", "_")
     .replaceAll("=", "");
 }
-export function decodeInvitation(
-  encoded: string,
-  now = Date.now(),
-): PairingInvitation {
+export function decodeHostInvitation(encoded: string): PairingInvitation {
   if (encoded.length > 2048 || !/^[A-Za-z0-9_-]+$/.test(encoded))
     throw new Error("Invalid invitation");
   const value = record(
@@ -105,7 +107,14 @@ export function decodeInvitation(
   credentials(value);
   details(value);
   if (value.version !== 1) throw new Error("Unsupported invitation version");
-  const deadline = Date.parse(value.expiresAt as string);
+  return value as unknown as PairingInvitation;
+}
+export function decodeInvitation(
+  encoded: string,
+  now = Date.now(),
+): PairingInvitation {
+  const value = decodeHostInvitation(encoded);
+  const deadline = Date.parse(value.expiresAt);
   if (deadline <= now || deadline > now + 600000)
     throw new Error("Invitation has expired or its deadline is invalid");
   return value as unknown as PairingInvitation;
@@ -152,4 +161,19 @@ export function validateWelcome(
   )
     throw new Error("Host identity did not match the approved connection");
   return value.hostEpoch;
+}
+
+export function createHostInvitationUrl(
+  invitation: PairingInvitation,
+  baseUrl = "https://p2pme.glentiki.dev/",
+): string {
+  const checked = decodeHostInvitation(encodeInvitation(invitation));
+  const url = new URL(baseUrl);
+  const loopback = ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname);
+  if (url.protocol !== "https:" && !(url.protocol === "http:" && loopback))
+    throw new Error("Invalid invitation origin");
+  if (url.username || url.password || url.search || url.hash)
+    throw new Error("Invalid invitation URL");
+  url.hash = `pair=${encodeInvitation(checked)}`;
+  return url.href;
 }
