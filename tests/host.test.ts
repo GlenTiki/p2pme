@@ -6,6 +6,7 @@ import {
   createHost,
   type HostController,
   type SessionAdapter,
+  type LocalProfile,
 } from "../src/host.js";
 import { MAX_SESSION_ENTRIES } from "../src/protocol.js";
 import { openHostStore } from "../src/host-store.js";
@@ -30,6 +31,7 @@ async function setup(
     beforeAppend?: (direction: string) => Promise<void>;
     beforeWrite?: () => Promise<void>;
     createFails?: boolean;
+    extraProfiles?: LocalProfile[];
     createProviderSessionId?: string;
   } = {},
 ) {
@@ -97,6 +99,7 @@ async function setup(
           };
         },
       },
+      ...(hooks.extraProfiles ?? []),
     ],
     logFactory: async (_sessionId, direction) => ({
       async append() {
@@ -141,6 +144,69 @@ async function setup(
 }
 
 describe("host dispatch", () => {
+  it("discovers only approved creatable contexts without logging or invoking providers", async () => {
+    const create = async () => {
+      throw new Error("Must not create during discovery");
+    };
+    const base = {
+      provider: "fake",
+      models: ["small"],
+      defaultModelId: "small",
+    };
+    const f = await setup(
+      {},
+      {
+        extraProfiles: [
+          { ...base, id: "unapproved", create },
+          { ...base, id: "attached-only" },
+          { ...base, id: "bad", provider: "", create },
+          { ...base, id: "bad", create },
+          { ...base, id: "custom", create },
+        ],
+      },
+    );
+    await f.store.update((state) => {
+      state.grants[0]!.profileIds = [
+        "test",
+        "attached-only",
+        "bad",
+        "custom",
+        "custom",
+        "missing",
+      ];
+    });
+    const response = await f.host.dispatch(
+      f.grant.id,
+      f.request("profiles.list"),
+    );
+    expect(response.ok && response.result).toEqual({
+      profiles: [
+        { id: "test", provider: "fake" },
+        { id: "custom", provider: "fake" },
+      ],
+    });
+    expect(f.order).toEqual([]);
+    await f.store.update((state) => {
+      state.grants[0]!.scopes = ["sessions:list"];
+    });
+    const denied = await f.host.dispatch(
+      f.grant.id,
+      f.request("profiles.list"),
+    );
+    expect(!denied.ok && denied.error.code).toBe("forbidden");
+  });
+
+  it("rejects more than 32 granted contexts", async () => {
+    const f = await setup();
+    await expect(
+      f.store.update((state) => {
+        state.grants[0]!.profileIds = Array.from({ length: 33 }, (_, id) =>
+          String(id),
+        );
+      }),
+    ).rejects.toThrow();
+  });
+
   it("logs a command before invocation and each result before output", async () => {
     const f = await setup();
     const response = await f.host.dispatch(

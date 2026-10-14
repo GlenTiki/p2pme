@@ -9,6 +9,7 @@ import {
 } from "./protocol.js";
 import {
   parseHostRequest,
+  profileInfoSchema,
   type Grant,
   type HostRequest,
   type HostResponse,
@@ -31,6 +32,7 @@ export type * from "./host-types.js";
 
 const requiredScopes: Record<HostRequest["op"], Scope> = {
   "sessions.list": "sessions:list",
+  "profiles.list": "sessions:create",
   "sessions.chat": "sessions:chat",
   "sessions.create": "sessions:create",
   "sessions.configure": "sessions:configure",
@@ -119,7 +121,8 @@ class LocalHost implements HostController {
   }
 
   private authorizeTarget(grant: Grant, request: HostRequest): void {
-    if (request.op === "sessions.list") return;
+    if (request.op === "sessions.list" || request.op === "profiles.list")
+      return;
     if (request.op === "sessions.create") {
       if (!grant.profileIds.includes(request.args.profileId))
         throw new HostFailure("forbidden", "Profile is not approved");
@@ -288,6 +291,8 @@ class LocalHost implements HostController {
     try {
       this.authorize(grantId, request);
       this.consume(grantId, request.id);
+      if (request.op === "profiles.list")
+        return this.success(request.id, this.listProfiles(grantId));
       if (request.op === "ui.get")
         return this.success(
           request.id,
@@ -368,6 +373,8 @@ class LocalHost implements HostController {
     signal: AbortSignal,
   ): Promise<Record<string, JsonValue>> {
     switch (request.op) {
+      case "profiles.list":
+        return this.listProfiles(grantId);
       case "sessions.list":
         return {
           sessions: this.options.store
@@ -391,6 +398,20 @@ class LocalHost implements HostController {
       case "ui.get":
         return this.surfaceResult(request.args.sessionId);
     }
+  }
+
+  private listProfiles(grantId: string): Record<string, JsonValue> {
+    return {
+      profiles: [...new Set(this.grant(grantId).profileIds)].flatMap((id) => {
+        const profile = this.options.profiles.find((item) => item.id === id);
+        if (!profile?.create) return [];
+        const result = profileInfoSchema.safeParse({
+          id,
+          provider: profile.provider,
+        });
+        return result.success ? [result.data] : [];
+      }),
+    };
   }
 
   private surfaceResult(sessionId: string): Record<string, JsonValue> {

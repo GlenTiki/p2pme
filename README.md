@@ -14,10 +14,10 @@ This is an early personal project by Glen Keane. Glen builds developer tools and
 
 Use Node.js 22 or later. The local host supports macOS and Linux. Install and authenticate the provider CLI you intend to use.
 
-The first release uses a GitHub tarball. Run this command after `v0.1.0` appears in [GitHub releases](https://github.com/GlenTiki/p2pme/releases):
+Install the package from a GitHub release tarball. Run this command after `v0.1.1` appears in [GitHub releases](https://github.com/GlenTiki/p2pme/releases):
 
 ```sh
-npm install --global https://github.com/GlenTiki/p2pme/releases/download/v0.1.0/glentiki-p2pme-0.1.0.tgz
+npm install --global https://github.com/GlenTiki/p2pme/releases/download/v0.1.1/glentiki-p2pme-0.1.1.tgz
 ```
 
 For a library dependency, omit `--global`. The package name is `@glentiki/p2pme`. This project does not require an npm registry login.
@@ -47,6 +47,8 @@ npm link
 10. Select the registered session in the browser.
 
 Select the profiles you intend to expose. Use `--profiles claude` for Claude or `--profiles codex,claude` for both. A profile list is required.
+
+The browser offers session creation only after the connected host supplies approved contexts. This requires host version 0.1.1 or later and the `sessions:create` grant. The same grant permits context discovery. Older hosts still support session lists and chat.
 
 The default grant permits session lists and chat. It expires after 30 days. It covers sessions registered on that host, including sessions registered later. The local approval screen shows the exact access. An agent must not answer that prompt for you.
 
@@ -166,6 +168,6 @@ To opt into the local pre-commit check, run `git config --local core.hooksPath .
 
 GitHub Actions checks pull requests. The Pages workflow builds and uploads only `public/` on `main`, then deploys through the `github-pages` environment. Enable GitHub Pages with Actions as its source. Configure `p2pme.glentiki.dev` as a custom domain and verify DNS before advertising the site. A project URL under `/p2pme/` needs a base-path change because this app uses root-relative links. Cloudflare Pages can use the same build command and output directory.
 
-A `v0.1.0` tag must match package version `0.1.0`. The release workflow runs all checks, packs the package and attaches its tarball to the GitHub release. It does not publish to npm. See [CHANGELOG.md](https://github.com/GlenTiki/p2pme/blob/main/CHANGELOG.md) for release changes.
+A `v0.1.1` tag must match package version `0.1.1`. The release workflow runs all checks, packs the package and attaches its tarball to the GitHub release. It does not publish to npm. See [CHANGELOG.md](https://github.com/GlenTiki/p2pme/blob/main/CHANGELOG.md) for release changes.
 
 MIT © Glen Keane. [More projects and contact](https://glentiki.dev).

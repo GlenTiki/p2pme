@@ -26,7 +26,15 @@ const values = z
 const requestBase = { version: z.literal(1), id, hostId: id, hostEpoch: id };
 const sessionText = z.strictObject({ sessionId: id, text });
 
+export const profileInfoSchema = z.strictObject({ id: label, provider: label });
+export type ProfileInfo = z.infer<typeof profileInfoSchema>;
+
 export const hostRequestSchema = z.discriminatedUnion("op", [
+  z.strictObject({
+    ...requestBase,
+    op: z.literal("profiles.list"),
+    args: z.strictObject({}),
+  }),
   z.strictObject({
     ...requestBase,
     op: z.literal("ui.get"),

@@ -1,6 +1,8 @@
 import { z } from "zod";
 import {
   sessionMetadataSchema,
+  profileInfoSchema,
+  type ProfileInfo,
   type SessionInfo,
 } from "../src/host-protocol.js";
 import type { Envelope } from "../src/protocol.js";
@@ -23,6 +25,21 @@ export function sessionList(input: unknown): SessionInfo[] {
         .max(32),
     })
     .parse(input).sessions;
+}
+
+export function profileList(input: unknown): ProfileInfo[] {
+  return z
+    .strictObject({
+      profiles: z
+        .array(profileInfoSchema)
+        .max(32)
+        .refine(
+          (profiles) =>
+            new Set(profiles.map((profile) => profile.id)).size ===
+            profiles.length,
+        ),
+    })
+    .parse(input).profiles;
 }
 
 export function actionButton(label: string, handler: () => void) {

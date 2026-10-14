@@ -78,5 +78,5 @@ export interface LogPair {
 }
 export type SessionRequest = Exclude<
   HostRequest,
-  { op: "sessions.list" | "sessions.create" }
+  { op: "sessions.list" | "sessions.create" | "profiles.list" }
 >;
