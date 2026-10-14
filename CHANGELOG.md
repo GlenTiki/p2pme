@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.1
+
+- Hide session creation until the connected host supplies approved contexts.
+- Add authenticated context discovery through `profiles.list`.
+- Clear context choices on disconnect and reject stale discovery results.
+- Keep sessions and chat available when a host cannot supply contexts.
+
 ## 0.1.0
 
 - Add signed Hypercore session logs and approved Hyperswarm peers.

@@ -30,6 +30,7 @@ const session = {
   createdAt: "2026-10-13T00:00:00Z",
   online: true,
 };
+const profile = { id: "review-project", provider: "custom-agent" };
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
 let app: ReturnType<typeof createBrowserApp>;
 let options: ClientOptions | undefined;
@@ -54,7 +55,11 @@ beforeEach(() => {
     hostId: host.hostId,
     hostEpoch: crypto.randomUUID(),
     request: vi.fn(async (op) =>
-      op === "ui.get" ? { surface: null } : { sessions: [session] },
+      op === "profiles.list"
+        ? { profiles: [profile] }
+        : op === "ui.get"
+          ? { surface: null }
+          : { sessions: [session] },
     ),
     close: vi.fn(async () => {}),
   };
@@ -86,6 +91,149 @@ afterEach(async () => {
   });
 });
 describe("browser connection controls", () => {
+  it("hides creation until the connected host supplies contexts and clears them on disconnect", async () => {
+    let profiles!: (value: JsonValue) => void;
+    const request = client.request;
+    client.request = vi.fn((op, args) =>
+      op === "profiles.list"
+        ? new Promise<JsonValue>((resolve) => {
+            profiles = resolve;
+          })
+        : request(op, args),
+    );
+    app = createBrowserApp(document, deps);
+    expect(el("create-session-panel").hidden).toBe(true);
+    expect(el<HTMLSelectElement>("session-profile").options).toHaveLength(0);
+    await submit("connect-form");
+    expect(el("create-session-panel").hidden).toBe(true);
+    acceptPair(host);
+    await tick();
+    expect(el("create-session-panel").hidden).toBe(true);
+    profiles({ profiles: [profile] });
+    await tick();
+    expect(el("create-session-panel").hidden).toBe(false);
+    expect(el<HTMLSelectElement>("session-profile").value).toBe(profile.id);
+    expect(el("session-profile").textContent).toContain(profile.provider);
+    expect(el<HTMLButtonElement>("create-session").disabled).toBe(false);
+    el<HTMLInputElement>("session-label").value = "Review";
+    el<HTMLDetailsElement>("create-session-panel").open = true;
+    await submit("create-session-form");
+    expect(client.request).toHaveBeenCalledWith("sessions.create", {
+      profileId: profile.id,
+      label: "Review",
+    });
+    await app.disconnect();
+    expect(el("create-session-panel").hidden).toBe(true);
+    expect(el<HTMLDetailsElement>("create-session-panel").open).toBe(false);
+    expect(el<HTMLSelectElement>("session-profile").options).toHaveLength(0);
+    expect(el<HTMLInputElement>("session-label").value).toBe("");
+  });
+
+  it.each([
+    { profiles: [] },
+    { profiles: [profile, profile] },
+    { profiles: [{ ...profile, path: "/private" }] },
+    { profiles: [{ id: "", provider: "agent" }] },
+    {
+      profiles: Array.from({ length: 33 }, (_, id) => ({
+        id: String(id),
+        provider: "agent",
+      })),
+    },
+    { sessions: [] },
+  ])("keeps chat usable when contexts are unavailable: %j", async (result) => {
+    const request = client.request;
+    client.request = vi.fn((op, args) =>
+      op === "profiles.list" ? Promise.resolve(result) : request(op, args),
+    );
+    app = createBrowserApp(document, deps);
+    await submit("connect-form");
+    acceptPair(host);
+    await tick();
+    expect(el("connection-status-text").textContent).toBe("Connected to host");
+    expect(el("create-session-panel").hidden).toBe(true);
+    expect(el("session-context-status").textContent).toContain("unavailable");
+    el("session-list").querySelector<HTMLButtonElement>("button")!.click();
+    expect(el<HTMLButtonElement>("send-message").disabled).toBe(false);
+  });
+
+  it("isolates discovery errors and rejects a context inserted into the select", async () => {
+    const request = client.request;
+    client.request = vi.fn((op, args) => {
+      if (op === "profiles.list") throw new Error("Old host rejects discovery");
+      return request(op, args);
+    });
+    app = createBrowserApp(document, deps);
+    await submit("connect-form");
+    acceptPair(host);
+    await tick();
+    expect(el("connection-status-text").textContent).toBe("Connected to host");
+    const option = document.createElement("option");
+    option.value = "injected";
+    el("session-profile").append(option);
+    await submit("create-session-form");
+    expect(client.request).not.toHaveBeenCalledWith(
+      "sessions.create",
+      expect.anything(),
+    );
+  });
+
+  it("ignores stale contexts after refresh or connection replacement", async () => {
+    const pending: Array<(value: JsonValue) => void> = [];
+    const request = client.request;
+    client.request = vi.fn((op, args) =>
+      op === "profiles.list"
+        ? new Promise<JsonValue>((resolve) => pending.push(resolve))
+        : request(op, args),
+    );
+    app = createBrowserApp(document, deps);
+    await submit("connect-form");
+    acceptPair(host);
+    await tick();
+    el("refresh-sessions").click();
+    await tick();
+    pending[1]!({ profiles: [profile] });
+    await tick();
+    pending[0]!({ profiles: [{ id: "stale", provider: "other" }] });
+    await tick();
+    expect(el<HTMLSelectElement>("session-profile").value).toBe(profile.id);
+    el("refresh-sessions").click();
+    await tick();
+    expect(el("create-session-panel").hidden).toBe(true);
+    await app.disconnect();
+    const otherHost = { ...host, hostId: crypto.randomUUID() };
+    const second = { ...client, hostId: otherHost.hostId };
+    second.request = vi.fn((op, args) =>
+      op === "profiles.list"
+        ? Promise.resolve({
+            profiles: [{ id: "second-host", provider: "agent" }],
+          })
+        : request(op, args),
+    );
+    deps.connect = vi.fn(async () => second);
+    await submit("connect-form");
+    acceptPair(otherHost);
+    await tick();
+    pending[2]!({ profiles: [profile] });
+    await tick();
+    expect(el<HTMLSelectElement>("session-profile").value).toBe("second-host");
+  });
+
+  it("ends context discovery when the session refresh fails", async () => {
+    app = createBrowserApp(document, deps);
+    await submit("connect-form");
+    acceptPair(host);
+    await tick();
+    client.request = vi.fn(async () => {
+      throw new Error("Session refresh failed");
+    });
+    el("refresh-sessions").click();
+    await tick();
+    expect(el("session-context-status").textContent).toContain("unavailable");
+    expect(el("session-context-status").textContent).not.toContain("Loading");
+    expect(el("create-session-panel").hidden).toBe(true);
+  });
+
   it("loads selected agent controls and accepts newer live surfaces", async () => {
     client.request = vi.fn(async (op) =>
       op === "ui.get"
@@ -134,6 +282,7 @@ describe("browser connection controls", () => {
     acceptPair(host);
     await tick();
     el<HTMLInputElement>("remember-host").checked = false;
+    expect(el("create-session-panel").hidden).toBe(true);
     connected(client);
     await tick();
     expect(localStorage.getItem("p2pme.hosts.v1")).toBeNull();
@@ -252,7 +401,7 @@ describe("browser connection controls", () => {
     await act(async () => {
       oldButton.click();
     });
-    expect(client.request).toHaveBeenCalledTimes(3);
+    expect(client.request).toHaveBeenCalledTimes(4);
   });
   it("keeps a live connection when credential storage fails", async () => {
     deps.storage = {

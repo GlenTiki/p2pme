@@ -262,15 +262,23 @@ Use “Try a local action” to inspect its data.</pre>
                 <li>Connect to a host to see its registered sessions.</li>
               </ul>
             </section>
-            <details class="create-session-panel">
+            <p id="session-context-status" class="field-help" hidden></p>
+            <details
+              id="create-session-panel"
+              class="create-session-panel"
+              hidden
+            >
               <summary>Create a session</summary>
               <form id="create-session-form">
-                <label for="session-profile">Local profile</label
-                ><select id="session-profile">
-                  <option value="codex">Codex</option>
-                  <option value="claude">Claude Code</option></select
+                <label for="session-profile">Session context</label
+                ><select id="session-profile" disabled></select
                 ><label for="session-label">Session name</label
-                ><input id="session-label" maxlength="100" required /><button
+                ><input
+                  id="session-label"
+                  maxlength="100"
+                  required
+                  disabled
+                /><button
                   class="button primary"
                   id="create-session"
                   type="submit"
@@ -279,8 +287,7 @@ Use “Try a local action” to inspect its data.</pre>
                   Create session
                 </button>
                 <p class="field-help">
-                  The host must approve this profile and grant session creation
-                  access.
+                  The connected host supplies these approved session contexts.
                 </p>
               </form>
             </details>

@@ -4,7 +4,7 @@ import {
   encodeInvitation,
   type ConnectionRecord,
 } from "../src/rtc-identity.js";
-import type { SessionInfo } from "../src/host-protocol.js";
+import type { ProfileInfo, SessionInfo } from "../src/host-protocol.js";
 import type { SurfaceAction } from "../src/surface.js";
 import { createSurfaceMount } from "./surface.js";
 import { createSurfaceDelivery } from "./surface-delivery.js";
@@ -14,6 +14,7 @@ import {
   createConversation,
   getElement,
   sessionList,
+  profileList,
 } from "./browser-view.js";
 import {
   loadHosts,
@@ -41,6 +42,7 @@ class BrowserApp {
   private busy = false;
   private sending = false;
   private creating = false;
+  private profiles: ProfileInfo[] = [];
   private connectionAbort: AbortController | null = null;
   private listeners: Array<() => void> = [];
   private readonly surface;
@@ -109,8 +111,16 @@ class BrowserApp {
       this.busy || this.client !== null;
     this.element<HTMLButtonElement>("disconnect-host").disabled =
       !this.busy && this.client === null;
+    const canCreate = this.client !== null && this.profiles.length > 0;
+    this.element("create-session-panel").hidden = !canCreate;
+    this.element("session-context-status").hidden =
+      this.client === null || canCreate;
+    const creationDisabled = !canCreate || this.creating;
     this.element<HTMLButtonElement>("create-session").disabled =
-      this.client === null || this.creating;
+      creationDisabled;
+    this.element<HTMLSelectElement>("session-profile").disabled =
+      creationDisabled;
+    this.element<HTMLInputElement>("session-label").disabled = creationDisabled;
     this.element<HTMLButtonElement>("refresh-sessions").disabled =
       this.client === null;
     this.element<HTMLButtonElement>("send-message").disabled =
@@ -254,8 +264,24 @@ class BrowserApp {
   private async refreshSessions(client: HostClient, generation: number) {
     if (generation !== this.generation) return;
     const sequence = ++this.refreshSequence;
-    const sessions = sessionList(await client.request("sessions.list", {}));
-    if (generation !== this.generation || sequence !== this.refreshSequence)
+    const profileId = this.element<HTMLSelectElement>("session-profile").value;
+    this.setProfiles([]);
+    this.element("session-context-status").textContent =
+      "Loading session contexts…";
+    const sessions = await client
+      .request("sessions.list", {})
+      .then(sessionList)
+      .catch((error: unknown) => {
+        if (generation !== this.generation || sequence !== this.refreshSequence)
+          return null;
+        this.setProfiles([]);
+        throw error;
+      });
+    if (
+      !sessions ||
+      generation !== this.generation ||
+      sequence !== this.refreshSequence
+    )
       return;
     const list = this.element("session-list");
     list.replaceChildren();
@@ -277,7 +303,41 @@ class BrowserApp {
     }
     if (this.selected) this.updateSelected(sessions);
     this.controls();
+    await this.refreshProfiles(client, generation, sequence, profileId);
     await this.refreshSurface();
+  }
+  private setProfiles(profiles: ProfileInfo[], selectedId = "") {
+    this.profiles = profiles;
+    const select = this.element<HTMLSelectElement>("session-profile");
+    select.replaceChildren(
+      ...profiles.map((profile) => {
+        const option = document.createElement("option");
+        option.value = profile.id;
+        option.textContent = `${profile.id} · ${profile.provider}`;
+        return option;
+      }),
+    );
+    if (profiles.some((profile) => profile.id === selectedId))
+      select.value = selectedId;
+    this.element("session-context-status").textContent =
+      "Session creation is unavailable. The host must provide contexts and grant creation access.";
+    this.controls();
+  }
+  private async refreshProfiles(
+    client: HostClient,
+    generation: number,
+    sequence: number,
+    selectedId: string,
+  ) {
+    let profiles: ProfileInfo[];
+    try {
+      profiles = profileList(await client.request("profiles.list", {}));
+    } catch {
+      profiles = [];
+    }
+    if (generation !== this.generation || sequence !== this.refreshSequence)
+      return;
+    this.setProfiles(profiles, selectedId);
   }
   private async refreshCurrentSessions() {
     if (this.client) await this.refreshSessions(this.client, this.generation);
@@ -363,13 +423,19 @@ class BrowserApp {
   }
   private async createSession() {
     const client = this.client;
-    if (!client || this.creating) return;
+    const profileId = this.element<HTMLSelectElement>("session-profile").value;
+    if (
+      !client ||
+      this.creating ||
+      !this.profiles.some((profile) => profile.id === profileId)
+    )
+      return;
     const generation = this.generation;
     this.creating = true;
     this.controls();
     try {
       await client.request("sessions.create", {
-        profileId: this.element<HTMLSelectElement>("session-profile").value,
+        profileId,
         label: this.element<HTMLInputElement>("session-label").value,
       });
       await this.refreshSessions(client, generation);
@@ -421,6 +487,9 @@ class BrowserApp {
     this.busy = false;
     this.sending = false;
     this.creating = false;
+    this.setProfiles([]);
+    this.element<HTMLInputElement>("session-label").value = "";
+    this.element<HTMLDetailsElement>("create-session-panel").open = false;
     this.element<HTMLInputElement>("delegate-task").checked = false;
     this.delivery.select(null);
     this.element("pairing-panel").hidden = true;

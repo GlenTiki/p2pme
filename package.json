@@ -1,6 +1,6 @@
 {
   "name": "@glentiki/p2pme",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Hypercore agent peers, approved local sessions, and reactive browser controls.",
   "type": "module",
   "license": "MIT",
