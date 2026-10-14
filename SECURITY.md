@@ -33,3 +33,5 @@ The public code exchange reveals the QR room ID, but keeps its random secret pri
 A remembered grant contains permanent room credentials until expiry or revocation. Scripts on the app's origin can read browser storage. Forget removes the local copy; `p2pme revoke GRANT_ID` revokes the grant at the host. Do not share browser profiles that hold device access.
 
 Public rendezvous and STUN providers can observe connection metadata. An ordinary page load does not contact them. A connection request, valid QR link, local invitation, or host recovery of an active grant starts discovery. Provider accounts, workspace permissions and local processes remain outside p2pme's device boundary.
+
+An invitation PNG contains the same secret as its QR link. `invite --qr-file` creates a new mode-0600 file in an existing private directory owned by the local user. It never overwrites an existing path. The skill removes its image after connection or expiry. Display the image only in the user’s setup conversation; do not commit or publish it.

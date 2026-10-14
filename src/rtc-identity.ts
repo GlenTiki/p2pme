@@ -165,7 +165,7 @@ export function validateWelcome(
 
 export function createHostInvitationUrl(
   invitation: PairingInvitation,
-  baseUrl = "https://p2pme.glentiki.dev/",
+  baseUrl = "https://p2pme.glentiki.dev/live/",
 ): string {
   const checked = decodeHostInvitation(encodeInvitation(invitation));
   const url = new URL(baseUrl);

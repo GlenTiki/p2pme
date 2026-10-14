@@ -1,3 +1,4 @@
+import { redirectHome } from "./navigation.js";
 import { createSurfaceMount } from "./surface.js";
 import { demoSurface } from "./demo.js";
 import { joinHostPairing } from "../src/host-pairing.js";
@@ -8,28 +9,34 @@ import { createBrowserApp } from "./browser-app.js";
 
 export { createSurfaceMount } from "./surface.js";
 
-const browser = document.getElementById("app")
-  ? createBrowserApp(
-      document,
-      {
-        join: joinHostPairing,
-        connect: connectHost,
-        copy: (text) => navigator.clipboard.writeText(text),
-        storage: {
-          getItem: (key) => localStorage.getItem(key),
-          setItem: (key, value) => localStorage.setItem(key, value),
-          removeItem: (key) => localStorage.removeItem(key),
+const redirected = redirectHome(location, history);
+const browser =
+  !redirected && document.getElementById("app")
+    ? createBrowserApp(
+        document,
+        {
+          join: joinHostPairing,
+          connect: connectHost,
+          copy: (text) => navigator.clipboard.writeText(text),
+          storage: {
+            getItem: (key) => localStorage.getItem(key),
+            setItem: (key, value) => localStorage.setItem(key, value),
+            removeItem: (key) => localStorage.removeItem(key),
+          },
         },
-      },
-      consumePairingLink(location, history, decodeHostInvitation),
-    )
-  : undefined;
+        consumePairingLink(location, history, decodeHostInvitation),
+      )
+    : undefined;
 
-const stopPairingLinks = watchPairingLinks(
-  window,
-  decodeHostInvitation,
-  (link) => browser?.openPairingLink(link),
-);
+const navigateHome = () => {
+  redirectHome(location, history);
+};
+const stopPairingLinks = browser
+  ? watchPairingLinks(window, decodeHostInvitation, (link) =>
+      browser.openPairingLink(link),
+    )
+  : () => window.removeEventListener("hashchange", navigateHome);
+if (!browser) window.addEventListener("hashchange", navigateHome);
 
 export async function disposeBrowser() {
   stopPairingLinks();
@@ -43,7 +50,7 @@ export function mountApprovedSurface(sessionId: string, surface: unknown) {
 
 const demo = document.getElementById("local-demo");
 const result = document.getElementById("local-demo-result");
-if (demo && result) {
+if (!redirected && demo && result) {
   createSurfaceMount(demo).mountSurface(
     "651f06dd-8e07-4c3e-acd4-1ac5db41b49a",
     demoSurface,

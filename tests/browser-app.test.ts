@@ -51,7 +51,7 @@ async function submit(id: string) {
 beforeEach(() => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
   options = undefined;
-  document.body.innerHTML = readFileSync("public/index.html", "utf8");
+  document.body.innerHTML = readFileSync("public/live/index.html", "utf8");
   localStorage.clear();
   el<HTMLInputElement>("pairing-code").value = "7K3M2Q-9RX4TW6P";
   client = {
@@ -185,7 +185,7 @@ describe("browser connection controls", () => {
     await submit("connect-form");
     expect(deps.join).toHaveBeenCalledTimes(1);
     expect(el("app-feedback").textContent).not.toContain("private-secret");
-    expect(el("app-feedback").textContent).toContain("Pairing failed");
+    expect(el("app-feedback").textContent).toContain("PAIRING_FAILED");
     expect(el("connection-status-text").textContent).toBe("Not connected");
   });
   it("hides creation until the connected host supplies contexts and clears them on disconnect", async () => {
@@ -287,14 +287,14 @@ describe("browser connection controls", () => {
     await submit("connect-form");
     acceptPair(host);
     await tick();
-    el("refresh-sessions").click();
+    el("refresh-sessions").dispatchEvent(new Event("click"));
     await tick();
     pending[1]!({ profiles: [profile] });
     await tick();
     pending[0]!({ profiles: [{ id: "stale", provider: "other" }] });
     await tick();
     expect(el<HTMLSelectElement>("session-profile").value).toBe(profile.id);
-    el("refresh-sessions").click();
+    el("refresh-sessions").dispatchEvent(new Event("click"));
     await tick();
     expect(el("create-session-panel").hidden).toBe(true);
     await app.disconnect();
@@ -681,4 +681,74 @@ describe("browser connection controls", () => {
     await submit("create-session-form");
     expect(el("app-feedback").textContent).toContain("sessions:create");
   });
+});
+
+describe("live connection phases", () => {
+  it("distinguishes a granted device from an unreachable permanent host", async () => {
+    deps.connect = vi.fn(async () => {
+      throw new Error("secret peer failure");
+    });
+    app = createBrowserApp(document, deps);
+    await submit("connect-form");
+    acceptPair(host);
+    await tick();
+    expect(el("app-feedback").textContent).toContain("HOST_UNREACHABLE");
+    expect(el("app-feedback").textContent).not.toContain("secret");
+  });
+  it("keeps a verified host when its sessions fail and permits refresh", async () => {
+    const request = client.request;
+    client.request = vi.fn(async () => {
+      throw new Error("secret list failure");
+    });
+    app = createBrowserApp(document, deps);
+    await submit("connect-form");
+    acceptPair(host);
+    await tick();
+    expect(el("connection-status-text").textContent).toBe("Connected to host");
+    expect(el("app-feedback").textContent).toContain("SESSIONS_UNAVAILABLE");
+    expect(el("app-feedback").textContent).not.toContain("secret");
+    expect(el<HTMLDetailsElement>("host-setup").open).toBe(false);
+    expect(el<HTMLButtonElement>("refresh-sessions").disabled).toBe(false);
+    client.request = request;
+    el("refresh-sessions").click();
+    await tick();
+    expect(el("session-list").textContent).toContain("Project");
+    expect(el("app-feedback").textContent).not.toContain(
+      "SESSIONS_UNAVAILABLE",
+    );
+  });
+});
+
+it("retains the host failure phase when its disconnect callback runs before welcome", async () => {
+  deps.connect = vi.fn(async (_record, callbacks) => {
+    callbacks.onDisconnect?.(new Error("secret early disconnect"));
+    throw new Error("secret welcome failure");
+  });
+  app = createBrowserApp(document, deps);
+  await submit("connect-form");
+  acceptPair(host);
+  await tick();
+  expect(el("app-feedback").textContent).toContain("HOST_UNREACHABLE");
+  expect(el("app-feedback").textContent).not.toContain("secret");
+});
+it("disables refresh for an outstanding list request and restores it after failure", async () => {
+  app = createBrowserApp(document, deps);
+  await submit("connect-form");
+  acceptPair(host);
+  await tick();
+  let reject!: (error: Error) => void;
+  client.request = vi.fn(
+    () =>
+      new Promise<JsonValue>((_resolve, fail) => {
+        reject = fail;
+      }),
+  );
+  el("refresh-sessions").click();
+  expect(el<HTMLButtonElement>("refresh-sessions").disabled).toBe(true);
+  el("refresh-sessions").click();
+  expect(client.request).toHaveBeenCalledTimes(1);
+  reject(new Error("secret"));
+  await tick();
+  expect(el<HTMLButtonElement>("refresh-sessions").disabled).toBe(false);
+  expect(el("connection-status-text").textContent).toBe("Connected to host");
 });

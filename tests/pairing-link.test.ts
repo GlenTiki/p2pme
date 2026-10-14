@@ -1,3 +1,4 @@
+import { redirectHome } from "../web/navigation.js";
 import { describe, expect, it, vi } from "vitest";
 import { consumePairingLink, watchPairingLinks } from "../web/pairing-link.js";
 
@@ -90,4 +91,31 @@ it("scrubs same-document links, preserves anchors and removes its listener", () 
   target.dispatchEvent(new Event("hashchange"));
   expect(receive).toHaveBeenCalledTimes(1);
   expect(f.location.hash).toBe("#pair=another");
+});
+
+it.each(["#pair=encoded", "#pair=%broken", "#app"])(
+  "replaces old root entries before live navigation: %s",
+  (hash) => {
+    const f = fixture(hash);
+    const replace = vi.fn(() => expect(f.location.hash).toBe(""));
+    expect(redirectHome({ ...f.location, replace }, f.history)).toBe(true);
+    expect(f.history.replaceState).toHaveBeenCalledWith(
+      f.history.state,
+      "",
+      "/?view=chat",
+    );
+    expect(replace).toHaveBeenCalledWith(
+      hash === "#app"
+        ? "/live/"
+        : hash === "#pair=encoded"
+          ? "/live/#pair=encoded"
+          : "/live/#pair",
+    );
+  },
+);
+it.each(["", "#about", "#demo"])("keeps root marketing anchors: %s", (hash) => {
+  const f = fixture(hash);
+  const replace = vi.fn();
+  expect(redirectHome({ ...f.location, replace }, f.history)).toBe(false);
+  expect(replace).not.toHaveBeenCalled();
 });

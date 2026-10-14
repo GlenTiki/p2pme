@@ -129,7 +129,9 @@ it("decodes host invitations independent of browser clock and validates host URL
   expect(decodeHostInvitation(encodeInvitation(invitation))).toEqual(
     invitation,
   );
-  expect(createHostInvitationUrl(invitation)).toContain("#pair=");
+  expect(createHostInvitationUrl(invitation)).toContain(
+    "https://p2pme.glentiki.dev/live/#pair=",
+  );
   for (const base of [
     "http://evil.example",
     "https://user:password@example.com",

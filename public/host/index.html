@@ -10,7 +10,7 @@
     <meta name="theme-color" content="#f7f6ef" />
     <title>Host setup — p2pme by Glen Keane</title>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="/styles.css" />
+    <link rel="stylesheet" href="/styles.css?v=0.2.0" />
   </head>
   <body>
     <a class="skip-link" href="#setup">Skip to host setup</a>
@@ -22,7 +22,7 @@
         ></a
       >
       <nav aria-label="Main navigation">
-        <a href="/#app">Open app <span aria-hidden="true">↗</span></a
+        <a href="/live/">Live session <span aria-hidden="true">↗</span></a
         ><a href="/#about">About</a
         ><a href="https://github.com/GlenTiki/p2pme"
           >GitHub <span aria-hidden="true">↗</span></a
@@ -82,9 +82,11 @@
                 >
               </div>
               <p class="field-help">
-                Install version 0.2.0 from the GitHub release. The package
-                includes the CLI, library and skill. After an upgrade, restart
-                the local host and register the selected sessions again.
+                Install version 0.2.0 from the GitHub release. Check that
+                <code>p2pme --help</code> lists <code>invite</code> and
+                <code>--qr-file</code>. The package includes the CLI, library
+                and skill. After an upgrade, restart the local host and register
+                the selected sessions again.
               </p>
               <p>
                 <a
@@ -191,12 +193,17 @@
                   Ask your local agent to use p2pme for the selected session.
                 </li>
                 <li>
-                  The agent runs <code>p2pme invite --profiles codex</code> and
-                  shows the access, code, link, and QR code.
+                  The agent checks that the selected session is online. It uses
+                  <code
+                    >p2pme invite --profiles codex --qr-file
+                    /absolute/private-directory/phone.png</code
+                  >
+                  with a new private temporary directory.
                 </li>
                 <li>
-                  Enter the code at <a href="/">p2pme.glentiki.dev</a>, or scan
-                  the QR code with your phone.
+                  The agent displays the QR image, access and expiry. Scan the
+                  image, open its connection link, or enter the code at
+                  <a href="/live/">p2pme.glentiki.dev/live</a>.
                 </li>
                 <li>Select a registered session after the host connects.</li>
                 <li>Select Remember host to save access on this browser.</li>
@@ -217,7 +224,9 @@
               <p>
                 Select <code>--profiles claude</code> for Claude or
                 <code>--profiles codex,claude</code> for both. A profile list is
-                required.
+                required. The PNG is created locally in a private directory. The
+                agent removes it after connection or expiry. A terminal
+                character grid does not replace the image.
               </p>
               <p>
                 The invitation authorizes one device for the displayed access.
@@ -229,8 +238,8 @@
                 Your agent keeps its local tool and file permissions. The
                 browser does not approve those actions for you.
               </p>
-              <a class="button primary" href="/#app"
-                >Open the app <span aria-hidden="true">→</span></a
+              <a class="button primary" href="/live/"
+                >Open live session <span aria-hidden="true">→</span></a
               >
             </div>
           </section>

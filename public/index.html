@@ -14,11 +14,11 @@
     <meta name="theme-color" content="#f7f6ef" />
     <title>p2pme — Connect agents. Control the work.</title>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="/styles.css" />
-    <script type="module" src="/app.js"></script>
+    <link rel="stylesheet" href="/styles.css?v=0.2.0" />
+    <script type="module" src="/app.js?v=0.2.0"></script>
   </head>
   <body>
-    <a class="skip-link" href="#app">Skip to the app</a>
+    <a class="skip-link" href="/live/">Skip to the live session</a>
     <header class="site-header page-width">
       <a class="wordmark" href="/" aria-label="p2pme home"
         ><span class="brand-icon" aria-hidden="true">p↔p</span>p2pme<span
@@ -27,6 +27,7 @@
         ></a
       >
       <nav aria-label="Main navigation">
+        <a href="/live/">Live session</a>
         <a href="/host/">Host setup <span aria-hidden="true">↗</span></a>
         <a href="#about">About</a>
         <a href="https://github.com/GlenTiki/p2pme"
@@ -53,8 +54,8 @@
             people. Use the chat example to reach a session from your phone.
           </p>
           <div class="hero-actions">
-            <a class="button primary" href="#app"
-              >Open the app <span aria-hidden="true">↓</span></a
+            <a class="button primary" href="/live/"
+              >Open live session <span aria-hidden="true">→</span></a
             ><a class="text-link" href="/host/"
               >Set up a host <span aria-hidden="true">↗</span></a
             >
@@ -130,230 +131,6 @@
             </p>
             <pre id="local-demo-result" aria-live="polite">
 Use “Try a local action” to inspect its data.</pre>
-          </div>
-        </div>
-      </section>
-      <section
-        class="app-section page-width"
-        id="app"
-        aria-labelledby="app-title"
-      >
-        <div class="section-heading">
-          <div>
-            <p class="eyebrow">YOUR WORKSPACE</p>
-            <h2 id="app-title">Connect. Choose. Chat.</h2>
-          </div>
-          <p class="connection-status" id="connection-status" role="status">
-            <span class="status-dot" aria-hidden="true"></span
-            ><span id="connection-status-text">Not connected</span>
-          </p>
-        </div>
-        <p class="development-note">
-          Ask your local agent for a code or QR link. Connect this browser. Then
-          choose a registered session.
-        </p>
-        <p id="app-feedback" class="app-feedback" role="status"></p>
-        <div class="workspace">
-          <aside class="host-panel" aria-labelledby="host-heading">
-            <div class="panel-heading">
-              <h3 id="host-heading">01 / Your host</h3>
-              <a href="/host/">Setup guide <span aria-hidden="true">↗</span></a>
-            </div>
-            <div class="agent-setup">
-              <label for="agent-prompt"
-                >First, paste this into your local agent</label
-              >
-              <textarea id="agent-prompt" rows="4" readonly spellcheck="false">
-Read https://p2pme.glentiki.dev/host and use the p2pme skill for this session. Return a pairing code and QR link with the access they grant.</textarea>
-              <button class="text-button" id="copy-agent-prompt" type="button">
-                Copy agent instruction
-              </button>
-              <p class="field-help">
-                The agent sets up the host and selected session. Keep its code
-                and QR link private.
-              </p>
-            </div>
-            <form id="connect-form">
-              <label for="pairing-code">Pairing code from your agent</label>
-              <input
-                id="pairing-code"
-                name="code"
-                type="text"
-                maxlength="64"
-                placeholder="7K3M2Q-9RX4TW6P"
-                autocomplete="off"
-                autocapitalize="characters"
-                spellcheck="false"
-                required
-              />
-              <label for="device-label">Name this browser</label>
-              <input
-                id="device-label"
-                name="label"
-                type="text"
-                value="My browser"
-                maxlength="100"
-                required
-              />
-              <label class="checkbox-label" for="remember-host"
-                ><input
-                  id="remember-host"
-                  type="checkbox"
-                  autocomplete="off"
-                /><span>Remember this host in this browser</span></label
-              >
-              <p class="field-help">
-                This saves a device access secret on this browser. Anyone who
-                can use this browser profile can use that access.
-              </p>
-              <button
-                class="button primary full-width"
-                id="connect-host"
-                type="submit"
-              >
-                Connect <span aria-hidden="true">→</span>
-              </button>
-              <p class="field-help">
-                Connect starts public relay discovery. The code or QR link
-                grants one device the stated access. No extra terminal prompt is
-                required.
-              </p>
-            </form>
-            <button
-              class="text-button"
-              id="remember-connected-host"
-              type="button"
-              hidden
-            >
-              Remember this connected host
-            </button>
-            <p class="host-identity" id="host-id"></p>
-            <button
-              class="text-button"
-              id="disconnect-host"
-              type="button"
-              disabled
-            >
-              Cancel / disconnect
-            </button>
-            <div class="saved-hosts">
-              <h4>Remembered hosts</h4>
-              <ul id="host-list" class="empty-list">
-                <li>No hosts yet.</li>
-              </ul>
-            </div>
-            <button class="text-button" id="forget-all-hosts" type="button">
-              Forget saved hosts
-            </button>
-            <p class="field-help">
-              Forget removes this browser's saved access. To revoke the device
-              on the host, run the local host revoke command.
-            </p>
-          </aside>
-          <div class="session-panel">
-            <section class="session-picker" aria-labelledby="session-heading">
-              <div class="panel-heading">
-                <h3 id="session-heading">02 / Select a session</h3>
-                <button
-                  id="refresh-sessions"
-                  class="text-button"
-                  type="button"
-                  disabled
-                >
-                  Refresh
-                </button>
-                <span class="subtle-label" id="host-label"
-                  >No host selected</span
-                >
-              </div>
-              <ul class="empty-list" id="session-list">
-                <li>Connect to a host to see its registered sessions.</li>
-              </ul>
-            </section>
-            <p id="session-context-status" class="field-help" hidden></p>
-            <details
-              id="create-session-panel"
-              class="create-session-panel"
-              hidden
-            >
-              <summary>Create a session</summary>
-              <form id="create-session-form">
-                <label for="session-profile">Session context</label
-                ><select id="session-profile" disabled></select
-                ><label for="session-label">Session name</label
-                ><input
-                  id="session-label"
-                  maxlength="100"
-                  required
-                  disabled
-                /><button
-                  class="button primary"
-                  id="create-session"
-                  type="submit"
-                  disabled
-                >
-                  Create session
-                </button>
-                <p class="field-help">
-                  The connected host supplies these approved session contexts.
-                </p>
-              </form>
-            </details>
-            <section class="chat-panel" aria-labelledby="chat-heading">
-              <div class="panel-heading">
-                <h3 id="chat-heading">03 / Conversation</h3>
-                <span class="subtle-label" id="selected-session"
-                  >No session selected</span
-                >
-              </div>
-              <div
-                id="messages"
-                class="messages"
-                role="log"
-                aria-label="Session messages"
-                aria-live="polite"
-              >
-                <div class="conversation-empty">
-                  <span class="empty-mark" aria-hidden="true">↔</span>
-                  <h4>A direct line to your session.</h4>
-                  <p>
-                    Select a session to start a conversation.<br />Your agent
-                    stays on your host.
-                  </p>
-                </div>
-              </div>
-              <div id="agent-controls" class="agent-controls" hidden>
-                <h4>Agent controls</h4>
-                <div id="session-surface"></div>
-              </div>
-              <label class="checkbox-label" for="delegate-task"
-                ><input id="delegate-task" type="checkbox" disabled /><span
-                  >Send as an agent task. This requires delegation access.</span
-                ></label
-              >
-              <form class="message-form" id="message-form">
-                <label class="visually-hidden" for="message-input"
-                  >Message your selected session</label
-                ><textarea
-                  id="message-input"
-                  name="message"
-                  rows="2"
-                  placeholder="Select a session to send a message…"
-                  disabled
-                ></textarea
-                ><button
-                  class="button primary"
-                  id="send-message"
-                  type="submit"
-                  disabled
-                >
-                  Send <span aria-hidden="true">↑</span>
-                </button>
-              </form>
-              <p class="chat-note">
-                Your agent’s local tool and file permissions still apply.
-              </p>
-            </section>
           </div>
         </div>
       </section>

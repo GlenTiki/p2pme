@@ -1,4 +1,5 @@
 import QRCode from "qrcode";
+import { reserveQrFile } from "./cli-qr.js";
 import { createHostInvitationUrl } from "./rtc-identity.js";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
@@ -19,7 +20,7 @@ import { approvePairing } from "./pairing.js";
 import { serveHostConnection } from "./host-connection.js";
 import type { LocalProfile } from "./host-types.js";
 
-const help = `p2pme host --workspace PATH [--state-dir PATH]\np2pme invite --profiles codex,claude [--agent] [--scopes LIST]\np2pme cancel-invite ATTEMPT_UUID\np2pme pair --profiles codex,claude [--agent] [--scopes LIST]\np2pme status\np2pme start codex|claude\np2pme register codex THREAD_ID\np2pme revoke GRANT_ID\np2pme ui publish SESSION_ID FILE\np2pme claude-setup SESSION_UUID --output-dir PATH\nInvite prints a code and QR. Possession authorizes one device with the stated access.\nLegacy pair reads the invitation from stdin. Approve on the host terminal.\nAll commands accept --state-dir PATH.\n`;
+const help = `p2pme host --workspace PATH [--state-dir PATH]\np2pme invite --profiles codex,claude [--agent] [--scopes LIST] [--qr-file ABSOLUTE_PATH]\np2pme cancel-invite ATTEMPT_UUID\np2pme pair --profiles codex,claude [--agent] [--scopes LIST]\np2pme status\np2pme start codex|claude\np2pme register codex THREAD_ID\np2pme revoke GRANT_ID\np2pme ui publish SESSION_ID FILE\np2pme claude-setup SESSION_UUID --output-dir PATH\nInvite prints a code and QR. Possession authorizes one device with the stated access.\n--qr-file writes a private PNG in an existing private directory.\nLegacy pair reads the invitation from stdin. Approve on the host terminal.\nAll commands accept --state-dir PATH.\n`;
 export interface CliOptions {
   input?: Readable;
   output?: Writable;
@@ -27,6 +28,23 @@ export interface CliOptions {
     options: DaemonOptions,
   ) => Promise<Pick<Daemon, "close"> & { host: { hostId: string } }>;
   request?: typeof controlRequest;
+  qrFile?: typeof reserveQrFile;
+}
+function qrArgument(args: string[]): string | undefined {
+  const index = args.indexOf("--qr-file");
+  if (index < 0) return;
+  const path = args[index + 1];
+  if (
+    args[0] !== "invite" ||
+    !path ||
+    path.startsWith("--") ||
+    args.lastIndexOf("--qr-file") !== index
+  )
+    throw new Error(
+      "Invalid QR image path. Use a new file in an existing private directory with an absolute path.",
+    );
+  args.splice(index, 2);
+  return path;
 }
 function globalArguments(argv: string[]): { args: string[]; stateDir: string } {
   const args = [...argv];
@@ -206,13 +224,42 @@ export async function runCli(
   if (await runClaudeChannelCommand(args, { socketPath, input, output }))
     return;
   if (args[0] === "host") return host(args, stateDir, options);
+  await runControl(args, socketPath, input, output, options);
+}
+
+async function runControl(
+  args: string[],
+  socketPath: string,
+  input: Readable,
+  output: Writable,
+  options: CliOptions,
+): Promise<void> {
+  const qrPath = qrArgument(args);
   const request = await command(args, input);
-  const response = await (options.request ?? controlRequest)(
-    socketPath,
-    { id: crypto.randomUUID(), ...request },
-    request.op === "pair" ? 600000 : 60000,
-  );
-  await printResponse(request.op, response.result, output);
+  const qr = qrPath
+    ? await (options.qrFile ?? reserveQrFile)(qrPath)
+    : undefined;
+  try {
+    const response = await (options.request ?? controlRequest)(
+      socketPath,
+      { id: crypto.randomUUID(), ...request },
+      request.op === "pair" ? 600000 : 60000,
+    );
+    await printResponse(request.op, response.result, output);
+    if (qr) {
+      try {
+        if (typeof response.result.url !== "string")
+          throw new Error("Invalid invitation response");
+        await qr.write(response.result.url);
+      } catch {
+        throw new Error(
+          "QR image could not be written. Use the printed code or connection link.",
+        );
+      }
+    }
+  } finally {
+    await qr?.close();
+  }
 }
 
 async function printInvitation(
@@ -221,14 +268,14 @@ async function printInvitation(
 ): Promise<void> {
   if (typeof result.url !== "string")
     throw new Error("Invalid invitation response");
-  const qr = await QRCode.toString(result.url, {
-    type: "terminal",
-    small: true,
-  });
   output.write(
     "This invitation authorizes one device. Access includes current and future registered sessions in these profiles. Chat, UI actions and delegated tasks can use the provider's existing tools and return local file content.\n",
   );
   output.write(terminalJson(result) + "\n");
+  const qr = await QRCode.toString(result.url, {
+    type: "terminal",
+    small: true,
+  });
   output.write(qr);
 }
 

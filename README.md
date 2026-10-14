@@ -6,7 +6,7 @@ A Hypercore library for local agent sessions. A browser app for people.
 
 p2pme connects approved native peers through signed message logs. Its local host exposes selected agent sessions to an approved browser. Agents can supply bounded reactive controls. People can send messages, submit those controls and delegate tasks within the host's grant.
 
-[Open the app](https://p2pme.glentiki.dev) · [Set up a host](https://p2pme.glentiki.dev/host/) · [Meet Glen Keane](https://glentiki.dev)
+[Open live sessions](https://p2pme.glentiki.dev/live/) · [Set up a host](https://p2pme.glentiki.dev/host/) · [Meet Glen Keane](https://glentiki.dev)
 
 This is an early personal project by Glen Keane. Glen builds developer tools and agent integrations. The chat app demonstrates the library. The library also supports agent-to-agent workflows.
 
@@ -38,11 +38,20 @@ npm link
 ## Connect a phone
 
 1. Give your local agent this instruction: “Read https://p2pme.glentiki.dev/host/ and use p2pme to connect this session to my phone.”
-2. The agent prepares the host, registers the selected session, and returns a code, link, and QR code.
-3. Enter the code at [p2pme.glentiki.dev](https://p2pme.glentiki.dev), or open the QR link.
+2. The agent prepares the host, registers the selected session, and returns a code, link, and QR image.
+3. Scan the displayed image, open its connection link, or enter the code at [p2pme.glentiki.dev/live](https://p2pme.glentiki.dev/live/).
 4. Select a session from the connected host.
 
-For manual setup, start `p2pme host --workspace /absolute/path/to/project`. Register an existing supported session or create one with `p2pme start codex` or `p2pme start claude`. Run `p2pme invite --profiles codex` in another terminal. Use `--profiles claude` for Claude or `--profiles codex,claude` for both. Keep the host process alive.
+For manual setup, start `p2pme host --workspace /absolute/path/to/project`. Register an existing supported session or create one with `p2pme start codex` or `p2pme start claude`. Run `p2pme status` to confirm that the selected session is online. Run `p2pme invite --profiles codex` in another terminal. Use `--profiles claude` for Claude or `--profiles codex,claude` for both. Keep the host process alive.
+
+For a QR image that an agent can display, create a private temporary directory and a new file:
+
+```sh
+qr_dir="$(mktemp -d)"
+p2pme invite --profiles codex --qr-file "$qr_dir/phone.png"
+```
+
+Show the PNG in your agent's image viewer. Keep the connection link and code available as alternatives. The PNG contains device access; remove it after connection or expiry. The command refuses existing files and non-private directories. It generates the image locally.
 
 Creating an invitation authorizes one device for the displayed access. The code or QR link completes pairing without another terminal prompt. Invitations expire after ten minutes. A failed code attempt leaves the QR link available. Request a new invitation explicitly if needed.
 
@@ -142,7 +151,7 @@ Run `npm run example:native` from a source checkout for a complete two-peer exch
 
 The browser does not run Hyperswarm. The host bridges browser requests into the selected local adapter. Browser device grants and native Noise peer descriptors are separate access mechanisms.
 
-Messages are at most 8 KiB. Surfaces are at most 24 KiB. Protocol frames are at most 32 KiB, including the surface envelope. A session log permits 2,048 entries. The host bounds its session and device lists. A host restart creates a new epoch; the client does not retry pending actions automatically. A timed-out action may have run. The native Claude reply wait ends after five minutes. A timeout or cancel stops the wait; Claude can still act on a delivered notification.
+Messages are at most 8 KiB. Surfaces are at most 24 KiB. Protocol frames are at most 32 KiB, including the surface envelope. A session log permits 2,048 entries. The host bounds its session and device lists. A host restart creates a new epoch; the client does not retry pending actions automatically. A timed-out action may have run. Session-list requests stop after 30 seconds and can be refreshed. Other host requests and the native Claude reply wait end after five minutes. A timeout or cancel stops the wait; Claude can still act on a delivered notification.
 
 When a log fills or fails, the host rejects further operations that use it. Restart the host to open fresh logs. The last request may already have reached the provider; inspect the session before you retry.
 

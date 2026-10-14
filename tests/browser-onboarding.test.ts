@@ -28,7 +28,7 @@ async function preview() {
       copy:async()=>{},storage:localStorage
     },link);
     watchPairingLinks(window,decode,link=>app.openPairingLink(link));
-    createSurfaceMount(document.getElementById('local-demo')).mountSurface(grant.hostId,demoSurface,action=>document.getElementById('local-demo-result').textContent=JSON.stringify(action));
+
     window.qa={joined,accept:()=>accept(grant),disconnect:()=>app.disconnect(),wasmReady:false};
     await ready;window.qa.wasmReady=true;
   `;
@@ -39,7 +39,7 @@ async function preview() {
     format: "esm",
     platform: "browser",
   });
-  const html = await readFile("public/index.html", "utf8");
+  const html = await readFile("public/live/index.html", "utf8");
   const css = await readFile("public/styles.css", "utf8");
   const server = createServer((request, response) => {
     const url = new URL(request.url!, "http://localhost");
@@ -98,13 +98,6 @@ it("runs host setup, QR removal, explicit remember and local controls under the 
         .getAttribute("content");
       expect(policy).toContain("'wasm-unsafe-eval'");
       expect(policy).not.toContain("'unsafe-eval'");
-      await page
-        .getByLabel("Task", { exact: true })
-        .fill("Check host controls");
-      await page.getByRole("button", { name: "Try a local action" }).click();
-      expect(await page.locator("#local-demo-result").innerText()).toContain(
-        "Check host controls",
-      );
       await page.goto(app.url + "/#pair=%broken");
       await page.waitForFunction(() => (window as ReadyWindow).qa?.wasmReady);
       await page.waitForFunction(() => location.hash === "");

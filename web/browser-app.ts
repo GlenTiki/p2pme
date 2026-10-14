@@ -53,6 +53,7 @@ class BrowserApp {
   private readonly surface;
   private readonly delivery;
   private refreshSequence = 0;
+  private refreshing = false;
   private readonly conversation;
   constructor(
     private readonly root: ParentNode,
@@ -92,7 +93,7 @@ class BrowserApp {
     }
     if (link.kind === "invalid")
       this.feedback(
-        "This pairing link is invalid. Request a new link from your agent.",
+        "LINK_INVALID: This connection link is invalid. Request a new link from your agent.",
       );
     if (link.kind === "invitation") void this.pair(link.invitation);
   }
@@ -111,12 +112,8 @@ class BrowserApp {
   private async run(action: () => void | Promise<void>) {
     try {
       await action();
-    } catch (error) {
-      this.feedback(
-        error instanceof Error
-          ? error.message.slice(0, 500)
-          : "The action failed.",
-      );
+    } catch {
+      this.feedback("The action failed. Check the host and try again.");
     }
   }
   private feedback(text: string) {
@@ -134,6 +131,13 @@ class BrowserApp {
       this.busy || this.client !== null;
     this.element<HTMLButtonElement>("disconnect-host").disabled =
       !this.busy && this.client === null;
+    this.sessionControls();
+    this.element<HTMLButtonElement>("send-message").disabled =
+      !ready || this.sending;
+    this.element<HTMLTextAreaElement>("message-input").disabled = !ready;
+    this.element<HTMLInputElement>("delegate-task").disabled = !ready;
+  }
+  private sessionControls() {
     const canCreate = this.client !== null && this.profiles.length > 0;
     this.element("create-session-panel").hidden = !canCreate;
     this.element("session-context-status").hidden =
@@ -145,11 +149,7 @@ class BrowserApp {
       creationDisabled;
     this.element<HTMLInputElement>("session-label").disabled = creationDisabled;
     this.element<HTMLButtonElement>("refresh-sessions").disabled =
-      this.client === null;
-    this.element<HTMLButtonElement>("send-message").disabled =
-      !ready || this.sending;
-    this.element<HTMLTextAreaElement>("message-input").disabled = !ready;
-    this.element<HTMLInputElement>("delegate-task").disabled = !ready;
+      this.client === null || this.refreshing;
   }
   private renderHosts() {
     const list = this.element("host-list");
@@ -192,8 +192,10 @@ class BrowserApp {
     const host = loadHosts(this.deps.storage).find(
       (record) => record.hostId === hostId,
     );
-    if (!host)
-      throw new Error("This host was forgotten. Pair again to connect.");
+    if (!host) {
+      this.feedback("This host was forgotten. Pair again to connect.");
+      return;
+    }
     await this.connect(host, false);
   }
   private async pair(invitation?: PairingInvitation) {
@@ -203,6 +205,7 @@ class BrowserApp {
     this.busy = true;
     this.controls();
     let attempt: JoinAttempt | undefined;
+    let paired = false;
     try {
       const input =
         invitation ?? this.element<HTMLInputElement>("pairing-code").value;
@@ -214,13 +217,16 @@ class BrowserApp {
       this.element<HTMLInputElement>("pairing-code").value = "";
       this.status("Pairing with host");
       const record = await attempt.completion;
+      paired = true;
       if (generation !== this.generation) return;
       await this.establish(record, true, generation);
     } catch {
       if (generation === this.generation) {
         await this.disconnect();
         this.feedback(
-          "Pairing failed. Use the QR link or request a new code from your agent.",
+          paired
+            ? "HOST_UNREACHABLE: The device was paired, but the host connection failed. Keep the host online, then reconnect or ask for a new invitation."
+            : "PAIRING_FAILED: Pairing did not complete. Keep the host online. Try the QR link or ask your agent for a new invitation.",
         );
       }
     } finally {
@@ -236,10 +242,12 @@ class BrowserApp {
     const generation = ++this.generation;
     try {
       await this.establish(record, remember, generation);
-    } catch (error) {
+    } catch {
       if (generation === this.generation) {
         await this.disconnect();
-        throw error;
+        this.feedback(
+          "HOST_UNREACHABLE: The device was paired, but the host connection failed. Keep the host online, then reconnect or ask for a new invitation.",
+        );
       }
     }
   }
@@ -254,10 +262,12 @@ class BrowserApp {
     const client = await this.deps.connect(record, {
       signal: abort.signal,
       onEvent: (event) => this.receive(event, generation),
-      onDisconnect: (error) => {
-        if (generation === this.generation) {
+      onDisconnect: () => {
+        if (generation === this.generation && this.client) {
           this.reset();
-          this.feedback(error.message);
+          this.feedback(
+            "HOST_UNREACHABLE: The device was paired, but the host connection failed. Keep the host online, then reconnect or ask for a new invitation.",
+          );
         }
       },
     });
@@ -271,6 +281,7 @@ class BrowserApp {
     this.element("host-id").textContent = `Host ID: ${client.hostId}`;
     this.element("host-label").textContent = record.label;
     this.status("Connected to host");
+    this.element<HTMLDetailsElement>("host-setup").open = false;
     this.controls();
     if (remember && this.element<HTMLInputElement>("remember-host").checked)
       this.remember(record);
@@ -292,24 +303,41 @@ class BrowserApp {
   private async refreshSessions(client: HostClient, generation: number) {
     if (generation !== this.generation) return;
     const sequence = ++this.refreshSequence;
+    this.refreshing = true;
+    if (
+      this.element("app-feedback").textContent?.startsWith(
+        "SESSIONS_UNAVAILABLE:",
+      )
+    )
+      this.feedback("");
+    this.controls();
+    try {
+      await this.loadSessions(client, generation, sequence);
+    } catch {
+      if (generation === this.generation && sequence === this.refreshSequence) {
+        this.setProfiles([]);
+        this.feedback(
+          "SESSIONS_UNAVAILABLE: Connected to the host, but sessions could not load. Select Refresh to try again.",
+        );
+      }
+    } finally {
+      if (generation === this.generation && sequence === this.refreshSequence) {
+        this.refreshing = false;
+        this.controls();
+      }
+    }
+  }
+  private async loadSessions(
+    client: HostClient,
+    generation: number,
+    sequence: number,
+  ) {
     const profileId = this.element<HTMLSelectElement>("session-profile").value;
     this.setProfiles([]);
     this.element("session-context-status").textContent =
       "Loading session contexts…";
-    const sessions = await client
-      .request("sessions.list", {})
-      .then(sessionList)
-      .catch((error: unknown) => {
-        if (generation !== this.generation || sequence !== this.refreshSequence)
-          return null;
-        this.setProfiles([]);
-        throw error;
-      });
-    if (
-      !sessions ||
-      generation !== this.generation ||
-      sequence !== this.refreshSequence
-    )
+    const sessions = sessionList(await client.request("sessions.list", {}));
+    if (generation !== this.generation || sequence !== this.refreshSequence)
       return;
     const list = this.element("session-list");
     list.replaceChildren();
@@ -326,7 +354,7 @@ class BrowserApp {
     if (!sessions.length) {
       const item = document.createElement("li");
       item.textContent =
-        "No registered sessions. Run /p2pme in a supported local agent session.";
+        "No registered sessions. Use the p2pme skill in your local agent.";
       list.append(item);
     }
     if (this.selected) this.updateSelected(sessions);
@@ -469,8 +497,11 @@ class BrowserApp {
       await this.refreshSessions(client, generation);
       if (generation === this.generation)
         this.feedback("Session created. Select it from the list.");
-    } catch (error) {
-      if (generation === this.generation) throw error;
+    } catch {
+      if (generation === this.generation)
+        this.feedback(
+          "Session creation failed. Check sessions:create access on the host.",
+        );
     } finally {
       if (generation === this.generation) {
         this.creating = false;
@@ -516,6 +547,8 @@ class BrowserApp {
     this.busy = false;
     this.sending = false;
     this.creating = false;
+    this.refreshing = false;
+    this.element<HTMLDetailsElement>("host-setup").open = true;
     this.setProfiles([]);
     this.element<HTMLInputElement>("session-label").value = "";
     this.element<HTMLDetailsElement>("create-session-panel").open = false;
