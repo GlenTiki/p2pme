@@ -1,5 +1,6 @@
 import type { SessionAdapter } from "../host-types.js";
 import { JsonRpc } from "./rpc.js";
+import { spawnCodexProxy } from "./proxy.js";
 import {
   PendingTurn,
   promptText,
@@ -214,14 +215,7 @@ export async function attachCodex(
 ): Promise<SessionAdapter> {
   providerId(options.threadId);
   if (options.expectedCwd !== undefined) localDirectory(options.expectedCwd);
-  const transport =
-    options.transport ??
-    spawnJsonProcess(
-      "codex",
-      ["app-server", "proxy"],
-      undefined,
-      options.spawn,
-    );
+  const transport = options.transport ?? spawnCodexProxy(options.spawn);
   const rpc = new JsonRpc(transport);
   try {
     await rpc.initialize();
