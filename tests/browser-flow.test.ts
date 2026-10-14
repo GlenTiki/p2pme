@@ -264,10 +264,16 @@ it.each(["injected", "code", "qr", "root-qr"])(
         await surface.getByRole("heading", { name: "Task note" }).isVisible(),
       ).toBe(true);
       await surface.getByRole("button", { name: "Try a local action" }).click();
-      await page
-        .locator("#messages")
-        .getByText("Action received", { exact: true })
-        .waitFor();
+      await expect
+        .poll(
+          () =>
+            page
+              .locator("#messages")
+              .getByText("Action received", { exact: true })
+              .count(),
+          { timeout: 30000 },
+        )
+        .toBe(2);
       await expect.poll(() => submitted.length).toBe(1);
       expect(JSON.parse(submitted[0]!)).toMatchObject({
         type: "ui.action",
